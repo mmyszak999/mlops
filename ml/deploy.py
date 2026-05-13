@@ -12,7 +12,7 @@ model = SKLearnModel(
     model_data=f"s3://{bucket}/models/model.tar.gz",
     role=role,
     framework_version="1.2-1",
-    entry_point="predict.py",
+    entry_point="ml/predict.py",
     sagemaker_session=session
 )
 
