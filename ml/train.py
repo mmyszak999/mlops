@@ -1,9 +1,12 @@
-import pandas as pd
-import joblib
+import tarfile
 
-from sklearn.model_selection import train_test_split
+import boto3
+import joblib
+import pandas as pd
+
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 
 df = pd.read_csv("data/data.csv")
 
@@ -44,3 +47,18 @@ accuracy = accuracy_score(y_test, preds)
 print(f"Model accuracy: {accuracy}")
 
 joblib.dump(model, "model.pkl")
+
+with tarfile.open("model.tar.gz", "w:gz") as tar:
+    tar.add("model.pkl")
+
+bucket_name = "mlops-thesis-d37b3fa3"
+
+s3 = boto3.client("s3")
+
+s3.upload_file(
+    "model.tar.gz",
+    bucket_name,
+    "models/model.tar.gz"
+)
+
+print("Model uploaded to S3")
