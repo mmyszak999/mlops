@@ -17,6 +17,7 @@ y = df["Survived"]
 
 X = df.drop(
     [
+        "PassengerId",
         "Survived",
         "Name",
         "Ticket",
