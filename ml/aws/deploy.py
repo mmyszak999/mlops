@@ -2,15 +2,7 @@ import sagemaker
 
 from sagemaker.sklearn.model import SKLearnModel
 
-# =========================
-# Model version
-# =========================
-
 MODEL_VERSION = "v1"
-
-# =========================
-# AWS configuration
-# =========================
 
 role = "arn:aws:iam::154959838069:role/sagemaker-execution-role-d37b3fa3"
 
@@ -18,9 +10,6 @@ bucket = "mlops-thesis-d37b3fa3"
 
 session = sagemaker.Session()
 
-# =========================
-# Deploy model
-# =========================
 
 model = SKLearnModel(
     model_data=f"s3://{bucket}/models/{MODEL_VERSION}/model.tar.gz",
