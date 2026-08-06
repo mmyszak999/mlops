@@ -8,17 +8,41 @@ runtime = boto3.client(
 
 payload = [[
     1,        # Pclass
-    38,       # Age
-    1,        # SibSp
+    12,       # Age
+    0,        # SibSp
     0,        # Parch
-    71.2833,  # Fare
+    1311.2833,  # Fare
     1,        # Sex_female
     0,        # Sex_male
-    1,        # Embarked_C
-    0,        # Embarked_Q
+    0,        # Embarked_C
+    1,        # Embarked_Q
     0         # Embarked_S
 ]]
+"""
+    3,
+    45,
+    0,
+    0,
+    7.25,
+    0,
+    1,
+    0,
+    0,
+    1
 
+    2,
+    30,
+    1,
+    1,
+    25,
+    1,
+    0,
+    1,
+    0,
+    0
+
+
+"""
 response = runtime.invoke_endpoint(
     EndpointName="mlops-thesis-endpoint",
     ContentType="application/json",

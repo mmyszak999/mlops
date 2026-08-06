@@ -8,6 +8,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
+
+MODEL_VERSION = "v1"
+
 df = pd.read_csv("data/data.csv")
 
 df["Age"] = df["Age"].fillna(df["Age"].median())
@@ -27,7 +30,6 @@ X = df.drop(
 )
 
 X = pd.get_dummies(X)
-print(X.columns)
 
 X_train, X_test, y_train, y_test = train_test_split(
     X,
@@ -36,6 +38,7 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42,
     stratify=y
 )
+
 
 model = RandomForestClassifier(
     n_estimators=200,
@@ -63,10 +66,12 @@ bucket_name = "mlops-thesis-d37b3fa3"
 
 s3 = boto3.client("s3")
 
+s3_key = f"models/{MODEL_VERSION}/model.tar.gz"
+
 s3.upload_file(
     "model.tar.gz",
     bucket_name,
-    "models/model.tar.gz"
+    s3_key
 )
 
-print("Model uploaded to S3")
+print(f"Model {MODEL_VERSION} uploaded to s3://{bucket_name}/{s3_key}")
