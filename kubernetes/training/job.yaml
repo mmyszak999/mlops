@@ -21,11 +21,11 @@ spec:
       containers:
         - name: training
 
-          image: IMAGE_PLACEHOLDER
+          image: TRAIN_IMAGE_PLACEHOLDER
 
           env:
             - name: MODEL_VERSION
-              value: "MODEL_VERSION_PLACEHOLDER"
+              value: MODEL_VERSION_PLACEHOLDER
 
             - name: MLFLOW_TRACKING_URI
               value: "http://mlflow:5000"

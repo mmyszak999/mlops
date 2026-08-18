@@ -1,4 +1,3 @@
-
 apiVersion: apps/v1
 kind: Deployment
 
@@ -24,7 +23,7 @@ spec:
       containers:
         - name: mlflow
 
-          image: ghcr.io/mlflow/mlflow:latest
+          image: MLFLOW_IMAGE_PLACEHOLDER
 
           ports:
             - containerPort: 5000
