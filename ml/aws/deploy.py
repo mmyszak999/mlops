@@ -7,7 +7,6 @@ from sagemaker.sklearn.model import SKLearnModel
 MODEL_VERSION = "v1"
 
 
-
 role = "arn:aws:iam::154959838069:role/sagemaker-execution-role-d37b3fa3"
 
 bucket = "mlops-thesis-d37b3fa3"
@@ -20,7 +19,7 @@ model = SKLearnModel(
     model_data=f"s3://{bucket}/models/{MODEL_VERSION}/model.tar.gz",
     role=role,
     framework_version="1.2-1",
-    entry_point="ml/aws/predict.py",
+    entry_point="ml/predict.py",
     sagemaker_session=session
 )
 

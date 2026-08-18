@@ -1,0 +1,90 @@
+name: Kubernetes - Build Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Model version"
+        required: true
+        default: "v1"
+
+jobs:
+  build-and-train:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+      MODEL_VERSION: ${{ inputs.model_version }}
+
+      EKS_CLUSTER_NAME: ${{ secrets.K8S_EKS_CLUSTER_NAME }}
+      TRAIN_ECR_REPOSITORY: ${{ secrets.K8S_TRAIN_ECR_REPOSITORY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build training image
+        run: |
+          docker build \
+            -f docker/train/Dockerfile \
+            -t "${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}" \
+            .
+
+      - name: Push training image
+        run: |
+          docker push \
+            "${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${AWS_REGION}" \
+            --name "${EKS_CLUSTER_NAME}"
+
+      - name: Apply namespace
+        run: |
+          kubectl apply \
+            -f kubernetes/namespace.yaml
+
+      - name: Prepare training Job
+        run: |
+          sed \
+            -e "s|IMAGE_PLACEHOLDER|${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}|g" \
+            -e "s|MODEL_VERSION_PLACEHOLDER|${MODEL_VERSION}|g" \
+            kubernetes/training/job.yaml \
+            > /tmp/training-job.yaml
+
+      - name: Start training Job
+        run: |
+          kubectl delete job mlops-training \
+            -n mlops \
+            --ignore-not-found
+
+          kubectl apply \
+            -f /tmp/training-job.yaml
+
+
+      - name: Wait for training Job
+        run: |
+          kubectl wait \
+            --for=condition=complete \
+            job/mlops-training \
+            -n mlops \
+            --timeout=30m
+
+      - name: Show training logs
+        run: |
+          kubectl logs \
+            -n mlops \
+            job/mlops-training

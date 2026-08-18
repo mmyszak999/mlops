@@ -1,77 +1,90 @@
+import os
 import tarfile
 
 import boto3
 import joblib
-import pandas as pd
 
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
+from core.data import load_data
+from core.model import (
+    create_model,
+    evaluate_model,
+    train_model,
+)
+from core.preprocessing import preprocess_data
 
 
-MODEL_VERSION = "v1"
-
-df = pd.read_csv("data/data.csv")
-
-df["Age"] = df["Age"].fillna(df["Age"].median())
-df["Embarked"] = df["Embarked"].fillna(df["Embarked"].mode()[0])
-
-y = df["Survived"]
-
-X = df.drop(
-    [
-        "PassengerId",
-        "Survived",
-        "Name",
-        "Ticket",
-        "Cabin"
-    ],
-    axis=1
+MODEL_VERSION = os.getenv(
+    "MODEL_VERSION",
+    "v1",
 )
 
-X = pd.get_dummies(X)
+MODEL_BUCKET = os.environ[
+    "MODEL_BUCKET"
+]
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
+df = load_data()
+
+(
+    X_train,
+    X_test,
+    y_train,
+    y_test,
+    feature_columns,
+) = preprocess_data(df)
+
+model = create_model()
+
+train_model(
+    model,
+    X_train,
+    y_train,
+)
+
+accuracy = evaluate_model(
+    model,
+    X_test,
+    y_test,
+)
+
+print(
+    f"Model accuracy: {accuracy:.4f}"
+)
+
+joblib.dump(
+    model,
+    "model.pkl",
+)
+
+joblib.dump(
+    feature_columns,
+    "columns.pkl",
 )
 
 
-model = RandomForestClassifier(
-    n_estimators=200,
-    max_depth=10,
-    min_samples_split=5,
-    random_state=42
-)
-
-model.fit(X_train, y_train)
-
-preds = model.predict(X_test)
-
-accuracy = accuracy_score(y_test, preds)
-
-print(f"Model accuracy: {accuracy:.4f}")
-
-joblib.dump(model, "model.pkl")
-joblib.dump(X.columns.tolist(), "columns.pkl")
-
-with tarfile.open("model.tar.gz", "w:gz") as tar:
+with tarfile.open(
+    "model.tar.gz",
+    "w:gz",
+) as tar:
     tar.add("model.pkl")
     tar.add("columns.pkl")
 
-bucket_name = "mlops-thesis-d37b3fa3"
+s3 = boto3.client(
+    "s3",
+)
 
-s3 = boto3.client("s3")
-
-s3_key = f"models/{MODEL_VERSION}/model.tar.gz"
+s3_key = (
+    f"models/"
+    f"{MODEL_VERSION}/"
+    f"model.tar.gz"
+)
 
 s3.upload_file(
     "model.tar.gz",
-    bucket_name,
-    s3_key
+    MODEL_BUCKET,
+    s3_key,
 )
 
-print(f"Model {MODEL_VERSION} uploaded to s3://{bucket_name}/{s3_key}")
+print(
+    f"Model {MODEL_VERSION} uploaded "
+    f"to s3://{MODEL_BUCKET}/{s3_key}"
+)

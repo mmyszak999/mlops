@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: Job
+
+metadata:
+  name: mlops-training
+  namespace: mlops
+
+spec:
+  backoffLimit: 0
+
+  template:
+    metadata:
+      labels:
+        app: mlops-training
+
+    spec:
+      restartPolicy: Never
+
+      serviceAccountName: mlops-training
+
+      containers:
+        - name: training
+
+          image: IMAGE_PLACEHOLDER
+
+          env:
+            - name: MODEL_VERSION
+              value: "MODEL_VERSION_PLACEHOLDER"
+
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow:5000"
+
+            - name: MODEL_NAME
+              value: "titanic-random-forest"
+
+          command:
+            - python
+
+          args:
+            - -m
+            - ml.kubernetes.train
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+
+            limits:
+              cpu: "1"
+              memory: "1Gi"

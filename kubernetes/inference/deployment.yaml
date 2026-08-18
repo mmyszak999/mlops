@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: mlops-inference
+  namespace: mlops
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: mlops-inference
+
+  template:
+    metadata:
+      labels:
+        app: mlops-inference
+
+    spec:
+      serviceAccountName: mlops-inference
+
+      containers:
+        - name: inference
+
+          image: IMAGE_PLACEHOLDER
+
+          ports:
+            - containerPort: 8080
+
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow:5000"
+
+            - name: MODEL_NAME
+              value: "titanic-random-forest"
+
+            - name: MODEL_VERSION
+              value: "MODEL_VERSION_PLACEHOLDER"
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+
+            initialDelaySeconds: 15
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+
+            initialDelaySeconds: 30
+            periodSeconds: 10

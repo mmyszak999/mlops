@@ -1,0 +1,94 @@
+
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: mlflow
+  namespace: mlops
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: mlflow
+
+  template:
+    metadata:
+      labels:
+        app: mlflow
+
+    spec:
+      serviceAccountName: mlflow
+
+      containers:
+        - name: mlflow
+
+          image: ghcr.io/mlflow/mlflow:latest
+
+          ports:
+            - containerPort: 5000
+
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_USER
+
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_DB
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+
+            - name: ARTIFACTS_DESTINATION
+              valueFrom:
+                configMapKeyRef:
+                  name: mlflow-config
+                  key: ARTIFACTS_DESTINATION
+
+          command:
+            - /bin/sh
+            - -c
+
+          args:
+            - >
+              mlflow server
+              --host 0.0.0.0
+              --port 5000
+              --backend-store-uri
+              postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+              --artifacts-destination ${ARTIFACTS_DESTINATION}
+              --serve-artifacts
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5000
+
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5000
+
+            initialDelaySeconds: 40
+            periodSeconds: 20
