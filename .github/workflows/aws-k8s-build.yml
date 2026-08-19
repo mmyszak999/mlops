@@ -33,9 +33,43 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
 
+      # ==========================================
+      # AWS identity diagnostic
+      # ==========================================
+
+      - name: Check AWS identity
+        run: |
+          echo "AWS identity:"
+          aws sts get-caller-identity
+
+
+      # ==========================================
+      # Check EKS access entry for current identity
+      # ==========================================
+
+      - name: Check EKS cluster
+        run: |
+          echo "EKS cluster:"
+          aws eks describe-cluster \
+            --name "${EKS_CLUSTER_NAME}" \
+            --region "${AWS_REGION}" \
+            --query 'cluster.{name:name,status:status,version:version,authentication:accessConfig.authenticationMode}'
+
+
+      # ==========================================
+      # ECR
+      # ==========================================
+
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
+
+
+      - name: Check ECR repository
+        run: |
+          aws ecr describe-repositories \
+            --repository-names "${TRAIN_ECR_REPOSITORY}" \
+            --region "${AWS_REGION}"
 
 
       - name: Build training image
@@ -56,6 +90,10 @@ jobs:
             "${ECR_REGISTRY}/${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}"
 
 
+      # ==========================================
+      # Kubernetes configuration
+      # ==========================================
+
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
@@ -63,11 +101,57 @@ jobs:
             --name "${EKS_CLUSTER_NAME}"
 
 
+      # ==========================================
+      # Kubernetes access diagnostic
+      # ==========================================
+
+      - name: Check Kubernetes access
+        run: |
+          echo "Current Kubernetes context:"
+          kubectl config current-context
+
+          echo ""
+          echo "Cluster info:"
+          kubectl cluster-info
+
+          echo ""
+          echo "Nodes:"
+          kubectl get nodes -o wide
+
+
+      # ==========================================
+      # Namespace
+      # ==========================================
+
       - name: Apply namespace
         run: |
           kubectl apply \
             -f kubernetes/namespace.yaml
 
+
+      # ==========================================
+      # AWS ServiceAccounts
+      # ==========================================
+
+      - name: Apply AWS ServiceAccounts
+        run: |
+          kubectl apply \
+            -f kubernetes/aws-service-accounts.yaml
+
+
+      # ==========================================
+      # Check ServiceAccounts
+      # ==========================================
+
+      - name: Check ServiceAccounts
+        run: |
+          kubectl get serviceaccounts \
+            -n mlops
+
+
+      # ==========================================
+      # Prepare training Job
+      # ==========================================
 
       - name: Prepare training Job
         env:
@@ -80,6 +164,10 @@ jobs:
             > /tmp/training-job.yaml
 
 
+      # ==========================================
+      # Start training Job
+      # ==========================================
+
       - name: Start training Job
         run: |
           kubectl delete job mlops-training \
@@ -90,6 +178,24 @@ jobs:
             -f /tmp/training-job.yaml
 
 
+      # ==========================================
+      # Show Job and Pod status
+      # ==========================================
+
+      - name: Check training status
+        run: |
+          echo "Jobs:"
+          kubectl get jobs -n mlops
+
+          echo ""
+          echo "Pods:"
+          kubectl get pods -n mlops -o wide
+
+
+      # ==========================================
+      # Wait for training Job
+      # ==========================================
+
       - name: Wait for training Job
         run: |
           kubectl wait \
@@ -98,6 +204,10 @@ jobs:
             -n mlops \
             --timeout=30m
 
+
+      # ==========================================
+      # Show training logs
+      # ==========================================
 
       - name: Show training logs
         run: |
