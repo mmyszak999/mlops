@@ -9,7 +9,7 @@ jobs:
 
     env:
       AWS_REGION: us-east-1
-      MODEL_BUCKET: ${{ secrets.NATIVE_MODEL_BUCKET }}
+      MODEL_BUCKET: mlops-thesis-d37b3fa3
       MODEL_VERSION: v1
 
     steps:
