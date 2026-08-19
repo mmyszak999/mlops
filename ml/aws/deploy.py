@@ -3,7 +3,6 @@ import sagemaker
 from sagemaker.sklearn.model import SKLearnModel
 
 
-
 MODEL_VERSION = "v1"
 
 
@@ -19,7 +18,7 @@ model = SKLearnModel(
     model_data=f"s3://{bucket}/models/{MODEL_VERSION}/model.tar.gz",
     role=role,
     framework_version="1.2-1",
-    entry_point="ml/predict.py",
+    entry_point="ml/aws/predict.py",
     sagemaker_session=session
 )
 
