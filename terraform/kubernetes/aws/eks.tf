@@ -77,3 +77,14 @@ resource "aws_eks_pod_identity_association" "inference" {
     aws_eks_addon.pod_identity_agent
   ]
 }
+
+resource "aws_eks_pod_identity_association" "mlflow" {
+  cluster_name    = aws_eks_cluster.k8s.name
+  namespace       = "mlops"
+  service_account = "mlflow"
+  role_arn        = aws_iam_role.mlflow_pod.arn
+
+  depends_on = [
+    aws_eks_addon.pod_identity_agent
+  ]
+}
