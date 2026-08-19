@@ -1,4 +1,4 @@
-name: AWS Deploy Model
+name: AWS Native - Deploy Model
 
 on:
   workflow_dispatch:

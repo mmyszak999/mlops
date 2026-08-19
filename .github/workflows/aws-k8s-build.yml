@@ -1,4 +1,4 @@
-name: Kubernetes - Build Model
+name: AWS Kubernetes - Build Model
 
 on:
   workflow_dispatch:
