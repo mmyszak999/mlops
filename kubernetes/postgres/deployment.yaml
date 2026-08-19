@@ -1,11 +1,13 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 
 metadata:
   name: postgres
   namespace: mlops
 
 spec:
+  serviceName: postgres
+
   replicas: 1
 
   selector:
@@ -20,6 +22,7 @@ spec:
     spec:
       containers:
         - name: postgres
+
           image: postgres:16
 
           ports:
@@ -41,30 +44,20 @@ spec:
               cpu: "500m"
               memory: "512Mi"
 
-          readinessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-
-            initialDelaySeconds: 10
-            periodSeconds: 5
-
-          livenessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-
-            initialDelaySeconds: 30
-            periodSeconds: 10
-
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
 
-      volumes:
-        - name: postgres-data
-          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+
+      spec:
+        accessModes:
+          - ReadWriteOnce
+
+        storageClassName: STORAGE_CLASS_PLACEHOLDER
+
+        resources:
+          requests:
+            storage: 10Gi
