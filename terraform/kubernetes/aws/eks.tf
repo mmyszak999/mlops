@@ -88,3 +88,21 @@ resource "aws_eks_pod_identity_association" "mlflow" {
     aws_eks_addon.pod_identity_agent
   ]
 }
+
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name = aws_eks_cluster.k8s.name
+  addon_name   = "aws-ebs-csi-driver"
+
+  resolve_conflicts_on_create = "OVERWRITE"
+
+  pod_identity_association {
+    role_arn        = aws_iam_role.ebs_csi.arn
+    service_account = "ebs-csi-controller-sa"
+  }
+
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_eks_addon.pod_identity_agent,
+    aws_iam_role_policy_attachment.ebs_csi
+  ]
+}

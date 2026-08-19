@@ -9,16 +9,14 @@ jobs:
 
     env:
       AWS_REGION: us-east-1
-
       EKS_CLUSTER_NAME: mlops-thesis-k8s
 
       MLFLOW_ECR_REPOSITORY: mlops-thesis-k8s-mlflow
+      MLFLOW_IMAGE_TAG: v1
 
       MODEL_BUCKET: ${{ secrets.K8S_MODEL_BUCKET }}
 
-      MLFLOW_IMAGE_TAG: v1
-
-      STORAGE_CLASS: gp2
+      STORAGE_CLASS: gp3
 
       POSTGRES_PASSWORD: password
 
@@ -68,7 +66,7 @@ jobs:
 
       - name: Build MLflow image
         env:
-          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           docker build \
             -f docker/mlflow/Dockerfile \
@@ -110,17 +108,7 @@ jobs:
 
 
       # ==========================================
-      # Check storage class
-      # ==========================================
-
-      - name: Check storage class
-        run: |
-          kubectl get storageclass
-          kubectl get storageclass "${STORAGE_CLASS}"
-
-
-      # ==========================================
-      # Apply namespace
+      # Namespace
       # ==========================================
 
       - name: Apply namespace
@@ -130,13 +118,33 @@ jobs:
 
 
       # ==========================================
-      # Apply AWS ServiceAccounts
+      # AWS ServiceAccounts
       # ==========================================
 
       - name: Apply AWS ServiceAccounts
         run: |
           kubectl apply \
             -f kubernetes/aws-service-accounts.yaml
+
+
+      # ==========================================
+      # PostgreSQL StorageClass
+      # ==========================================
+
+      - name: Apply PostgreSQL StorageClass
+        run: |
+          kubectl apply \
+            -f kubernetes/postgres/storage-class.yaml
+
+
+      # ==========================================
+      # Check StorageClass
+      # ==========================================
+
+      - name: Check storage class
+        run: |
+          kubectl get storageclass
+          kubectl get storageclass "${STORAGE_CLASS}"
 
 
       # ==========================================
@@ -175,6 +183,11 @@ jobs:
             kubernetes/postgres/deployment.yaml \
             > /tmp/postgres-statefulset.yaml
 
+
+      # ==========================================
+      # Remove old PostgreSQL Deployment
+      # ==========================================
+
       - name: Remove old PostgreSQL Deployment
         run: |
           kubectl delete deployment postgres \
@@ -183,7 +196,7 @@ jobs:
 
 
       # ==========================================
-      # Apply PostgreSQL
+      # Apply PostgreSQL StatefulSet
       # ==========================================
 
       - name: Apply PostgreSQL StatefulSet
@@ -197,10 +210,16 @@ jobs:
           echo "=== PostgreSQL PVCs ==="
           kubectl get pvc -n mlops
 
+
+      # ==========================================
+      # Apply PostgreSQL Service
+      # ==========================================
+
       - name: Apply PostgreSQL service
         run: |
           kubectl apply \
             -f kubernetes/postgres/service.yaml
+
 
       # ==========================================
       # Wait for PostgreSQL
@@ -215,17 +234,19 @@ jobs:
 
 
       # ==========================================
-      # Check PostgreSQL
+      # PostgreSQL diagnostic
       # ==========================================
 
       - name: Check PostgreSQL
         run: |
+          echo "=== PostgreSQL Pods ==="
           kubectl get pods \
             -n mlops \
-            -l app=postgres
+            -l app=postgres \
+            -o wide
 
           echo ""
-
+          echo "=== PostgreSQL PVCs ==="
           kubectl get pvc \
             -n mlops
 
@@ -267,13 +288,18 @@ jobs:
 
 
       # ==========================================
-      # Apply MLflow
+      # Apply MLflow Deployment
       # ==========================================
 
       - name: Apply MLflow Deployment
         run: |
           kubectl apply \
             -f /tmp/mlflow-deployment.yaml
+
+
+      # ==========================================
+      # Apply MLflow Service
+      # ==========================================
 
       - name: Apply MLflow service
         run: |
@@ -300,21 +326,20 @@ jobs:
       - name: Show platform status
         run: |
           echo "=== Pods ==="
-
           kubectl get pods \
             -n mlops \
             -o wide
 
           echo ""
-
           echo "=== Services ==="
-
           kubectl get services \
             -n mlops
 
           echo ""
-
           echo "=== PVCs ==="
-
           kubectl get pvc \
             -n mlops
+
+          echo ""
+          echo "=== StorageClasses ==="
+          kubectl get storageclass
