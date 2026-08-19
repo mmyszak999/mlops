@@ -21,7 +21,7 @@ spec:
       containers:
         - name: training
 
-          image: TRAIN_IMAGE_PLACEHOLDER
+          image: IMAGE_PLACEHOLDER
 
           env:
             - name: MODEL_VERSION
