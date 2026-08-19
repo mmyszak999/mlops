@@ -1,4 +1,4 @@
-name: Kubernetes Infrastructure
+name: AWS Kubernetes Infrastructure
 
 on:
   workflow_dispatch:
