@@ -1,5 +1,6 @@
 import json
 import os
+
 import joblib
 import pandas as pd
 
@@ -15,7 +16,7 @@ def model_fn(model_dir):
 
     return {
         "model": model,
-        "columns": columns,
+        "columns": columns
     }
 
 
@@ -43,14 +44,14 @@ def predict_fn(input_data, model_data):
 
     prediction = model.predict(df)
 
-    return int(prediction[0])
+    return {
+        "prediction": int(prediction[0])
+    }
 
 
 def output_fn(prediction, response_content_type):
     if response_content_type == "application/json":
-        return json.dumps({
-            "prediction": prediction
-        })
+        return json.dumps(prediction)
 
     raise ValueError(
         f"Unsupported response type: {response_content_type}"
