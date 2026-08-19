@@ -9,7 +9,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: terraform/kubernetes
+        working-directory: terraform/kubernetes/aws
 
     steps:
       - name: Checkout repository
@@ -27,6 +27,9 @@ jobs:
 
       - name: Terraform Init
         run: terraform init
+
+      - name: Terraform plan
+        run: terraform plan
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
