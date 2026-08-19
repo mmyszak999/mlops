@@ -6,7 +6,10 @@ COPY ml/kubernetes/train-requirements.txt .
 
 RUN pip install --no-cache-dir -r train-requirements.txt
 
-COPY ml/kubernetes/train.py .
+COPY ml/__init__.py ./ml/__init__.py
+COPY ml/core ./ml/core
+COPY ml/kubernetes ./ml/kubernetes
+
 COPY data ./data
 
-CMD ["python", "train.py"]
+CMD ["python", "-m", "ml.kubernetes.train"]
