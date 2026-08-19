@@ -69,25 +69,29 @@ spec:
 
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "250m"
+              memory: "512Mi"
 
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "1"
+              memory: "2Gi"
 
           readinessProbe:
             httpGet:
               path: /
               port: 5000
 
-            initialDelaySeconds: 20
-            periodSeconds: 10
+              initialDelaySeconds: 30
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 6
 
           livenessProbe:
             httpGet:
               path: /
               port: 5000
 
-            initialDelaySeconds: 40
-            periodSeconds: 20
+              initialDelaySeconds: 90
+              periodSeconds: 20
+              timeoutSeconds: 5
+              failureThreshold: 3
