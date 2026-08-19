@@ -185,11 +185,16 @@ jobs:
           kubectl apply \
             -f /tmp/postgres-statefulset.yaml
 
+          echo "=== PostgreSQL StatefulSets ==="
+          kubectl get statefulset -n mlops
+
+          echo "=== PostgreSQL PVCs ==="
+          kubectl get pvc -n mlops
+
       - name: Apply PostgreSQL service
         run: |
           kubectl apply \
             -f kubernetes/postgres/service.yaml
-
 
       # ==========================================
       # Wait for PostgreSQL
