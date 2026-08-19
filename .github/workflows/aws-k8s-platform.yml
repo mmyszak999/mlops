@@ -175,6 +175,12 @@ jobs:
             kubernetes/postgres/deployment.yaml \
             > /tmp/postgres-statefulset.yaml
 
+      - name: Remove old PostgreSQL Deployment
+        run: |
+          kubectl delete deployment postgres \
+            -n mlops \
+            --ignore-not-found
+
 
       # ==========================================
       # Apply PostgreSQL
