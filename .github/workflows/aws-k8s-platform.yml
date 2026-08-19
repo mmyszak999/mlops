@@ -1,0 +1,309 @@
+name: AWS Kubernetes - Platform
+
+on:
+  workflow_dispatch:
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+
+      EKS_CLUSTER_NAME: mlops-thesis-k8s
+
+      MLFLOW_ECR_REPOSITORY: mlops-thesis-k8s-mlflow
+
+      MODEL_BUCKET: ${{ secrets.K8S_MODEL_BUCKET }}
+
+      MLFLOW_IMAGE_TAG: v1
+
+      STORAGE_CLASS: gp3
+
+      POSTGRES_PASSWORD: password
+
+    steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # AWS credentials
+      # ==========================================
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      # ==========================================
+      # AWS identity
+      # ==========================================
+
+      - name: Check AWS identity
+        run: |
+          aws sts get-caller-identity
+
+
+      # ==========================================
+      # ECR login
+      # ==========================================
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+
+      # ==========================================
+      # Build MLflow image
+      # ==========================================
+
+      - name: Build MLflow image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker build \
+            -f docker/mlflow/Dockerfile \
+            -t "${ECR_REGISTRY}/${MLFLOW_ECR_REPOSITORY}:${MLFLOW_IMAGE_TAG}" \
+            .
+
+
+      # ==========================================
+      # Push MLflow image
+      # ==========================================
+
+      - name: Push MLflow image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker push \
+            "${ECR_REGISTRY}/${MLFLOW_ECR_REPOSITORY}:${MLFLOW_IMAGE_TAG}"
+
+
+      # ==========================================
+      # Configure kubectl
+      # ==========================================
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${AWS_REGION}" \
+            --name "${EKS_CLUSTER_NAME}"
+
+
+      # ==========================================
+      # Check Kubernetes access
+      # ==========================================
+
+      - name: Check Kubernetes access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+
+      # ==========================================
+      # Check storage class
+      # ==========================================
+
+      - name: Check storage class
+        run: |
+          kubectl get storageclass
+          kubectl get storageclass "${STORAGE_CLASS}"
+
+
+      # ==========================================
+      # Apply namespace
+      # ==========================================
+
+      - name: Apply namespace
+        run: |
+          kubectl apply \
+            -f kubernetes/namespace.yaml
+
+
+      # ==========================================
+      # Apply AWS ServiceAccounts
+      # ==========================================
+
+      - name: Apply AWS ServiceAccounts
+        run: |
+          kubectl apply \
+            -f kubernetes/aws-service-accounts.yaml
+
+
+      # ==========================================
+      # Prepare PostgreSQL secret
+      # ==========================================
+
+      - name: Prepare PostgreSQL secret
+        run: |
+          sed \
+            -e "s|POSTGRES_PASSWORD_PLACEHOLDER|${POSTGRES_PASSWORD}|g" \
+            kubernetes/postgres/secret.yaml \
+            > /tmp/postgres-secret.yaml
+
+
+      # ==========================================
+      # Apply PostgreSQL configuration
+      # ==========================================
+
+      - name: Apply PostgreSQL configuration
+        run: |
+          kubectl apply \
+            -f kubernetes/postgres/config.yaml
+
+          kubectl apply \
+            -f /tmp/postgres-secret.yaml
+
+
+      # ==========================================
+      # Prepare PostgreSQL StatefulSet
+      # ==========================================
+
+      - name: Prepare PostgreSQL StatefulSet
+        run: |
+          sed \
+            -e "s|STORAGE_CLASS_PLACEHOLDER|${STORAGE_CLASS}|g" \
+            kubernetes/postgres/deployment.yaml \
+            > /tmp/postgres-statefulset.yaml
+
+
+      # ==========================================
+      # Apply PostgreSQL
+      # ==========================================
+
+      - name: Apply PostgreSQL StatefulSet
+        run: |
+          kubectl apply \
+            -f /tmp/postgres-statefulset.yaml
+
+      - name: Apply PostgreSQL service
+        run: |
+          kubectl apply \
+            -f kubernetes/postgres/service.yaml
+
+
+      # ==========================================
+      # Wait for PostgreSQL
+      # ==========================================
+
+      - name: Wait for PostgreSQL
+        run: |
+          kubectl rollout status \
+            statefulset/postgres \
+            -n mlops \
+            --timeout=10m
+
+
+      # ==========================================
+      # Check PostgreSQL
+      # ==========================================
+
+      - name: Check PostgreSQL
+        run: |
+          kubectl get pods \
+            -n mlops \
+            -l app=postgres
+
+          echo ""
+
+          kubectl get pvc \
+            -n mlops
+
+
+      # ==========================================
+      # Prepare MLflow config
+      # ==========================================
+
+      - name: Prepare MLflow config
+        run: |
+          sed \
+            -e "s|ARTIFACTS_DESTINATION_PLACEHOLDER|s3://${MODEL_BUCKET}/mlflow|g" \
+            kubernetes/mlflow/config.yaml \
+            > /tmp/mlflow-config.yaml
+
+
+      # ==========================================
+      # Apply MLflow config
+      # ==========================================
+
+      - name: Apply MLflow config
+        run: |
+          kubectl apply \
+            -f /tmp/mlflow-config.yaml
+
+
+      # ==========================================
+      # Prepare MLflow Deployment
+      # ==========================================
+
+      - name: Prepare MLflow Deployment
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          sed \
+            -e "s|MLFLOW_IMAGE_PLACEHOLDER|${ECR_REGISTRY}/${MLFLOW_ECR_REPOSITORY}:${MLFLOW_IMAGE_TAG}|g" \
+            kubernetes/mlflow/deployment.yaml \
+            > /tmp/mlflow-deployment.yaml
+
+
+      # ==========================================
+      # Apply MLflow
+      # ==========================================
+
+      - name: Apply MLflow Deployment
+        run: |
+          kubectl apply \
+            -f /tmp/mlflow-deployment.yaml
+
+      - name: Apply MLflow service
+        run: |
+          kubectl apply \
+            -f kubernetes/mlflow/service.yaml
+
+
+      # ==========================================
+      # Wait for MLflow
+      # ==========================================
+
+      - name: Wait for MLflow
+        run: |
+          kubectl rollout status \
+            deployment/mlflow \
+            -n mlops \
+            --timeout=10m
+
+
+      # ==========================================
+      # Final status
+      # ==========================================
+
+      - name: Show platform status
+        run: |
+          echo "=== Pods ==="
+
+          kubectl get pods \
+            -n mlops \
+            -o wide
+
+          echo ""
+
+          echo "=== Services ==="
+
+          kubectl get services \
+            -n mlops
+
+          echo ""
+
+          echo "=== PVCs ==="
+
+          kubectl get pvc \
+            -n mlops

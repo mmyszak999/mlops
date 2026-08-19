@@ -37,3 +37,11 @@ output "train_ecr_repository_name" {
 output "configure_kubectl_command" {
   value = "aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.k8s.name}"
 }
+
+output "mlflow_ecr_repository_name" {
+  value = aws_ecr_repository.mlflow.name
+}
+
+output "mlflow_ecr_repository_url" {
+  value = aws_ecr_repository.mlflow.repository_url
+}
