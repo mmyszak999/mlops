@@ -3,14 +3,13 @@ import os
 import mlflow
 import mlflow.sklearn
 
-from core.data import load_data
-from core.model import (
+from ml.core.data import load_data
+from ml.core.model import (
     create_model,
     evaluate_model,
     train_model,
 )
-from core.preprocessing import preprocess_data
-
+from ml.core.preprocessing import preprocess_data
 
 MODEL_NAME = os.getenv(
     "MODEL_NAME",
