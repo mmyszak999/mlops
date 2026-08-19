@@ -20,8 +20,10 @@ jobs:
       TRAIN_ECR_REPOSITORY: mlops-thesis-k8s-train
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -30,21 +32,29 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
+
       - name: Build training image
+        env:
+          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
         run: |
           docker build \
             -f docker/train/Dockerfile \
-            -t "${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}" \
+            -t "${ECR_REGISTRY}/${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}" \
             .
 
+
       - name: Push training image
+        env:
+          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
         run: |
           docker push \
-            "${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}"
+            "${ECR_REGISTRY}/${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}"
+
 
       - name: Update kubeconfig
         run: |
@@ -52,18 +62,23 @@ jobs:
             --region "${AWS_REGION}" \
             --name "${EKS_CLUSTER_NAME}"
 
+
       - name: Apply namespace
         run: |
           kubectl apply \
             -f kubernetes/namespace.yaml
 
+
       - name: Prepare training Job
+        env:
+          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
         run: |
           sed \
-            -e "s|IMAGE_PLACEHOLDER|${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}|g" \
+            -e "s|IMAGE_PLACEHOLDER|${ECR_REGISTRY}/${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}|g" \
             -e "s|MODEL_VERSION_PLACEHOLDER|${MODEL_VERSION}|g" \
             kubernetes/training/job.yaml \
             > /tmp/training-job.yaml
+
 
       - name: Start training Job
         run: |
@@ -82,6 +97,7 @@ jobs:
             job/mlops-training \
             -n mlops \
             --timeout=30m
+
 
       - name: Show training logs
         run: |
