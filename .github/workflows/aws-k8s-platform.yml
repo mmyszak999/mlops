@@ -185,17 +185,6 @@ jobs:
 
 
       # ==========================================
-      # Remove old PostgreSQL Deployment
-      # ==========================================
-
-      - name: Remove old PostgreSQL Deployment
-        run: |
-          kubectl delete deployment postgres \
-            -n mlops \
-            --ignore-not-found
-
-
-      # ==========================================
       # Apply PostgreSQL StatefulSet
       # ==========================================
 
