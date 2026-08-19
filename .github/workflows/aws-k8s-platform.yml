@@ -18,7 +18,7 @@ jobs:
 
       MLFLOW_IMAGE_TAG: v1
 
-      STORAGE_CLASS: gp3
+      STORAGE_CLASS: gp2
 
       POSTGRES_PASSWORD: password
 
@@ -68,7 +68,7 @@ jobs:
 
       - name: Build MLflow image
         env:
-          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
         run: |
           docker build \
             -f docker/mlflow/Dockerfile \
