@@ -16,8 +16,8 @@ jobs:
       AWS_REGION: us-east-1
       MODEL_VERSION: ${{ inputs.model_version }}
 
-      EKS_CLUSTER_NAME: ${{ secrets.K8S_EKS_CLUSTER_NAME }}
-      TRAIN_ECR_REPOSITORY: ${{ secrets.K8S_TRAIN_ECR_REPOSITORY }}
+      EKS_CLUSTER_NAME: mlops-thesis-k8s
+      TRAIN_ECR_REPOSITORY: mlops-thesis-k8s-train
 
     steps:
       - name: Checkout repository
