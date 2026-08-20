@@ -3,8 +3,13 @@ name: AWS Kubernetes - Deploy Model
 on:
   workflow_dispatch:
     inputs:
-      model_version:
-        description: "Model version to deploy"
+      image_version:
+        description: "Inference image version"
+        required: true
+        default: "1"
+
+      model_registry_version:
+        description: "MLflow Model Registry version"
         required: true
         default: "1"
 
@@ -14,24 +19,19 @@ jobs:
 
     env:
       AWS_REGION: us-east-1
-      MODEL_VERSION: ${{ inputs.model_version }}
 
       EKS_CLUSTER_NAME: mlops-thesis-k8s
+
       INFERENCE_ECR_REPOSITORY: mlops-thesis-k8s-inference
 
-    steps:
+      IMAGE_VERSION: ${{ inputs.image_version }}
+      MODEL_REGISTRY_VERSION: ${{ inputs.model_registry_version }}
 
-      # ==========================================
-      # Checkout
-      # ==========================================
+    steps:
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # ==========================================
-      # AWS credentials
-      # ==========================================
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -41,53 +41,33 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
 
-      # ==========================================
-      # Check AWS identity
-      # ==========================================
-
       - name: Check AWS identity
         run: |
           aws sts get-caller-identity
 
-
-      # ==========================================
-      # ECR login
-      # ==========================================
 
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
 
-      # ==========================================
-      # Build inference image
-      # ==========================================
-
       - name: Build inference image
         env:
-          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           docker build \
             -f docker/inference/Dockerfile \
-            -t "${ECR_REGISTRY}/${INFERENCE_ECR_REPOSITORY}:${MODEL_VERSION}" \
+            -t "${ECR_REGISTRY}/${INFERENCE_ECR_REPOSITORY}:${IMAGE_VERSION}" \
             .
 
 
-      # ==========================================
-      # Push inference image
-      # ==========================================
-
       - name: Push inference image
         env:
-          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           docker push \
-            "${ECR_REGISTRY}/${INFERENCE_ECR_REPOSITORY}:${MODEL_VERSION}"
+            "${ECR_REGISTRY}/${INFERENCE_ECR_REPOSITORY}:${IMAGE_VERSION}"
 
-
-      # ==========================================
-      # Configure kubectl
-      # ==========================================
 
       - name: Update kubeconfig
         run: |
@@ -96,19 +76,11 @@ jobs:
             --name "${EKS_CLUSTER_NAME}"
 
 
-      # ==========================================
-      # Check Kubernetes access
-      # ==========================================
-
       - name: Check Kubernetes access
         run: |
           kubectl cluster-info
           kubectl get nodes
 
-
-      # ==========================================
-      # Namespace
-      # ==========================================
 
       - name: Apply namespace
         run: |
@@ -116,34 +88,25 @@ jobs:
             -f kubernetes/namespace.yaml
 
 
-      # ==========================================
-      # AWS ServiceAccounts
-      # ==========================================
-
       - name: Apply AWS ServiceAccounts
         run: |
           kubectl apply \
             -f kubernetes/aws-service-accounts.yaml
 
 
-      # ==========================================
-      # Prepare inference deployment
-      # ==========================================
-
       - name: Prepare inference deployment
         env:
-          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
           sed \
-            -e "s|INFERENCE_IMAGE_PLACEHOLDER|${ECR_REGISTRY}/${INFERENCE_ECR_REPOSITORY}:${MODEL_VERSION}|g" \
-            -e "s|MODEL_VERSION_PLACEHOLDER|${MODEL_VERSION}|g" \
+            -e "s|INFERENCE_IMAGE_PLACEHOLDER|${ECR_REGISTRY}/${INFERENCE_ECR_REPOSITORY}:${IMAGE_VERSION}|g" \
+            -e "s|MODEL_REGISTRY_VERSION_PLACEHOLDER|${MODEL_REGISTRY_VERSION}|g" \
             kubernetes/inference/deployment.yaml \
             > /tmp/inference-deployment.yaml
 
+          echo "=== Generated deployment ==="
+          cat /tmp/inference-deployment.yaml
 
-      # ==========================================
-      # Apply inference deployment
-      # ==========================================
 
       - name: Apply inference deployment
         run: |
@@ -151,19 +114,11 @@ jobs:
             -f /tmp/inference-deployment.yaml
 
 
-      # ==========================================
-      # Apply inference service
-      # ==========================================
-
       - name: Apply inference service
         run: |
           kubectl apply \
             -f kubernetes/inference/service.yaml
 
-
-      # ==========================================
-      # Wait for rollout
-      # ==========================================
 
       - name: Wait for inference deployment
         run: |
@@ -172,10 +127,6 @@ jobs:
             -n mlops \
             --timeout=10m
 
-
-      # ==========================================
-      # Show deployment status
-      # ==========================================
 
       - name: Show pods
         run: |
