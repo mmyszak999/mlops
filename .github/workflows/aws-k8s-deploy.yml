@@ -6,7 +6,7 @@ on:
       model_version:
         description: "Model version to deploy"
         required: true
-        default: "v1"
+        default: "1"
 
 jobs:
   deploy:
