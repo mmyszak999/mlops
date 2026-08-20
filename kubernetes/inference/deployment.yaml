@@ -36,7 +36,7 @@ spec:
               value: "titanic-random-forest"
 
             - name: MODEL_REGISTRY_VERSION
-              value: MODEL_VERSION_PLACEHOLDER
+              value: "MODEL_REGISTRY_VERSION_PLACEHOLDER"
 
           resources:
             requests:

@@ -53,7 +53,7 @@ jobs:
 
       - name: Build inference image
         env:
-          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
         run: |
           docker build \
             -f docker/inference/Dockerfile \
@@ -63,7 +63,7 @@ jobs:
 
       - name: Push inference image
         env:
-          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
         run: |
           docker push \
             "${ECR_REGISTRY}/${INFERENCE_ECR_REPOSITORY}:${IMAGE_VERSION}"
@@ -96,7 +96,7 @@ jobs:
 
       - name: Prepare inference deployment
         env:
-          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REGISTRY: 154959838069.dkr.ecr.us-east-1.amazonaws.com
         run: |
           sed \
             -e "s|INFERENCE_IMAGE_PLACEHOLDER|${ECR_REGISTRY}/${INFERENCE_ECR_REPOSITORY}:${IMAGE_VERSION}|g" \
