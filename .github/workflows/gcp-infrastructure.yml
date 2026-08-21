@@ -47,7 +47,6 @@ jobs:
         run: |
           gcloud auth list
           gcloud config set project "${GCP_PROJECT_ID}"
-          gcloud projects describe "${GCP_PROJECT_ID}"
 
 
       # ==========================================
