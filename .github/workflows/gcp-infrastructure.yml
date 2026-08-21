@@ -1,0 +1,139 @@
+name: GCP - Infrastructure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  infrastructure:
+    runs-on: ubuntu-latest
+
+    env:
+      TF_WORKING_DIR: terraform/gcp
+      GCP_PROJECT_ID: project-6e2348ec-04b1-4ad0-9e5
+
+    steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # Authenticate to Google Cloud
+      # ==========================================
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ==========================================
+      # Check GCP authentication
+      # ==========================================
+
+      - name: Check GCP authentication
+        run: |
+          gcloud auth list
+          gcloud config set project "${GCP_PROJECT_ID}"
+          gcloud projects describe "${GCP_PROJECT_ID}"
+
+
+      # ==========================================
+      # Terraform Init
+      # ==========================================
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init -reconfigure
+
+
+      # ==========================================
+      # Terraform Format Check
+      # ==========================================
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform fmt -check -recursive
+
+
+      # ==========================================
+      # Terraform Validate
+      # ==========================================
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform validate
+
+
+      # ==========================================
+      # Prepare Terraform variables
+      # ==========================================
+
+      - name: Prepare Terraform variables
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          cat > terraform.tfvars <<EOF
+          project_id   = "${GCP_PROJECT_ID}"
+          region       = "us-central1"
+          project_name = "mlops-thesis"
+          EOF
+
+
+      # ==========================================
+      # Terraform Plan
+      # ==========================================
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform plan \
+            -out=tfplan
+
+
+      # ==========================================
+      # Terraform Apply
+      # ==========================================
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform apply \
+            -auto-approve \
+            tfplan
+
+
+      # ==========================================
+      # Terraform Outputs
+      # ==========================================
+
+      - name: Show Terraform Outputs
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          echo "=== Terraform Outputs ==="
+
+          terraform output
+
+          echo ""
+          echo "=== Model Bucket ==="
+
+          terraform output -raw model_bucket_name
+
+          echo ""
+          echo "=== Artifact Registry ==="
+
+          terraform output -raw artifact_registry_repository_url
