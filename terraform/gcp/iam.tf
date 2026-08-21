@@ -3,8 +3,8 @@ data "google_project" "current" {
 }
 
 resource "google_project_service_identity" "vertex_ai" {
-  project  = var.project_id
-  service  = "aiplatform.googleapis.com"
+  project = var.project_id
+  service = "aiplatform.googleapis.com"
 
   depends_on = [
     google_project_service.required["aiplatform.googleapis.com"]
