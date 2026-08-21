@@ -1,8 +1,6 @@
-data "google_project" "current" {
-  project_id = var.project_id
-}
-
 resource "google_project_service_identity" "vertex_ai" {
+  provider = google-beta
+
   project = var.project_id
   service = "aiplatform.googleapis.com"
 
@@ -14,8 +12,7 @@ resource "google_project_service_identity" "vertex_ai" {
 resource "google_storage_bucket_iam_member" "vertex_ai_reader" {
   bucket = google_storage_bucket.models.name
 
-  role = "roles/storage.objectViewer"
-
+  role   = "roles/storage.objectViewer"
   member = google_project_service_identity.vertex_ai.member
 
   depends_on = [
