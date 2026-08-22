@@ -120,6 +120,7 @@ jobs:
         run: |
           gcloud auth list --filter=status:ACTIVE
           gcloud auth print-access-token >/dev/null
+          gcloud config get-value project
           
       # ==========================================
       # Deploy model to Vertex AI
