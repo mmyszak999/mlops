@@ -9,6 +9,14 @@ resource "google_project_service_identity" "vertex_ai" {
   ]
 }
 
+resource "time_sleep" "wait_for_vertex_ai_service_identity" {
+  create_duration = "60s"
+
+  depends_on = [
+    google_project_service_identity.vertex_ai
+  ]
+}
+
 resource "google_storage_bucket_iam_member" "vertex_ai_reader" {
   bucket = google_storage_bucket.models.name
 
@@ -16,6 +24,6 @@ resource "google_storage_bucket_iam_member" "vertex_ai_reader" {
   member = google_project_service_identity.vertex_ai.member
 
   depends_on = [
-    google_project_service_identity.vertex_ai
+    time_sleep.wait_for_vertex_ai_service_identity
   ]
 }
