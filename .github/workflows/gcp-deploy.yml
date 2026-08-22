@@ -35,7 +35,7 @@ jobs:
 
 
       # ==========================================
-      # Authenticate to Google Cloud
+      # Authenticate GCP
       # ==========================================
 
       - name: Authenticate to Google Cloud
@@ -73,13 +73,15 @@ jobs:
 
 
       # ==========================================
-      # Get model bucket
+      # Get infrastructure outputs
       # ==========================================
 
-      - name: Get model bucket
+      - name: Get Terraform outputs
         working-directory: terraform/gcp
         run: |
           echo "MODEL_BUCKET=$(terraform output -raw model_bucket_name)" >> "$GITHUB_ENV"
+
+          echo "ARTIFACT_REGISTRY_URL=$(terraform output -raw artifact_registry_repository_url)" >> "$GITHUB_ENV"
 
 
       # ==========================================
@@ -92,16 +94,28 @@ jobs:
           echo "GCP_REGION=${GCP_REGION}"
           echo "MODEL_VERSION=${MODEL_VERSION}"
           echo "MODEL_BUCKET=${MODEL_BUCKET}"
+          echo "ARTIFACT_REGISTRY_URL=${ARTIFACT_REGISTRY_URL}"
 
 
       # ==========================================
-      # Verify model artifacts
+      # Verify model
       # ==========================================
 
-      - name: Verify model artifacts
+      - name: Verify model artifact
         run: |
           gcloud storage ls \
             "gs://${MODEL_BUCKET}/models/${MODEL_VERSION}/"
+
+
+      # ==========================================
+      # Configure Docker
+      # ==========================================
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker \
+            "${GCP_REGION}-docker.pkg.dev" \
+            --quiet
 
 
       # ==========================================
@@ -116,24 +130,18 @@ jobs:
             -r ml/gcp/requirements.txt
 
 
-      - name: Check GCP identity
-        run: |
-          gcloud auth list --filter=status:ACTIVE
-          gcloud auth print-access-token >/dev/null
-          gcloud config get-value project
-          
       # ==========================================
-      # Deploy model to Vertex AI
+      # Build & deploy model
       # ==========================================
 
       - name: Deploy model
-        id: deploy
         run: |
+          PYTHONPATH="${GITHUB_WORKSPACE}" \
           python ml/gcp/deploy.py
 
 
       # ==========================================
-      # Show created resources
+      # Show resources
       # ==========================================
 
       - name: Show Vertex models
@@ -145,4 +153,4 @@ jobs:
       - name: Show Vertex endpoints
         run: |
           gcloud ai endpoints list \
-            --region="${GCP_REGION}"  
+            --region="${GCP_REGION}"

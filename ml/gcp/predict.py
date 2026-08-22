@@ -1,7 +1,7 @@
 import os
 
 import joblib
-import pandas as pd
+import numpy as np
 
 from google.cloud.aiplatform.prediction.predictor import Predictor
 from google.cloud.aiplatform.utils import prediction_utils
@@ -9,22 +9,16 @@ from google.cloud.aiplatform.utils import prediction_utils
 
 class TitanicPredictor(Predictor):
     """
-    Custom Prediction Routine for the Titanic model.
-
-    Vertex AI calls:
-        load()
-        preprocess()
-        predict()
-        postprocess()
+    Custom Vertex AI predictor for the Titanic model.
     """
 
     def __init__(self):
         self.model = None
-        self.columns = None
 
-    def load(self, artifacts_uri: str) -> None:
+    def load(self, artifacts_uri: str):
         """
-        Download model artifacts from GCS and load them into memory.
+        Download model artifacts from GCS
+        and load the serialized sklearn pipeline.
         """
 
         prediction_utils.download_model_artifacts(
@@ -32,57 +26,55 @@ class TitanicPredictor(Predictor):
         )
 
         self.model = joblib.load(
-            os.path.join(
-                "model.pkl"
-            )
+            "model.joblib"
         )
 
-        self.columns = joblib.load(
-            os.path.join(
-                "columns.pkl"
-            )
-        )
-
-    def preprocess(self, prediction_input: dict):
+    def preprocess(
+        self,
+        prediction_input: dict,
+    ) -> np.ndarray:
         """
-        Vertex receives:
-        {
-            "instances": [...]
-        }
+        Convert Vertex AI request into model input.
 
-        Return only the instances for prediction.
+        Expected request:
+
+        {
+            "instances": [
+                {
+                    "Pclass": 1,
+                    "Sex": "female",
+                    "Age": 12,
+                    "SibSp": 0,
+                    "Parch": 0,
+                    "Fare": 1311.2833,
+                    "Embarked": "Q"
+                }
+            ]
+        }
         """
 
         return prediction_input["instances"]
 
-    def predict(self, instances):
+    def predict(
+        self,
+        instances,
+    ):
         """
-        Convert input instances to the same feature representation
-        that was used during training.
+        Run prediction using the complete sklearn pipeline.
         """
-
-        df = pd.DataFrame(
-            instances
-        )
-
-        df = pd.get_dummies(
-            df
-        )
-
-        df = df.reindex(
-            columns=self.columns,
-            fill_value=0,
-        )
 
         predictions = self.model.predict(
-            df
+            instances
         )
 
         return predictions
 
-    def postprocess(self, prediction_results):
+    def postprocess(
+        self,
+        prediction_results,
+    ) -> dict:
         """
-        Convert predictions into a JSON-serializable response.
+        Return JSON-serializable predictions.
         """
 
         return {

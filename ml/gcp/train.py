@@ -2,7 +2,6 @@ import os
 
 import joblib
 from google.cloud import storage
-
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
@@ -15,10 +14,6 @@ from ml.core.pipeline_preprocessing import (
     create_preprocessor,
 )
 
-
-# =========================================================
-# Configuration
-# =========================================================
 
 MODEL_VERSION = os.getenv(
     "MODEL_VERSION",
@@ -72,7 +67,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 
 # =========================================================
-# Build complete ML pipeline
+# Complete pipeline
 # =========================================================
 
 model_pipeline = Pipeline(
@@ -118,7 +113,7 @@ print(
 # Save complete model
 # =========================================================
 
-model_filename = "model.pkl"
+model_filename = "model.joblib"
 
 joblib.dump(
     model_pipeline,
@@ -143,9 +138,8 @@ blob = bucket.blob(
 )
 
 blob.upload_from_filename(
-    model_filename,
+    model_filename
 )
-
 
 print(
     "Model uploaded successfully:"
