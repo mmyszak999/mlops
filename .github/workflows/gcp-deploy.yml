@@ -116,6 +116,11 @@ jobs:
             -r ml/gcp/requirements.txt
 
 
+      - name: Check GCP identity
+        run: |
+          gcloud auth list --filter=status:ACTIVE
+          gcloud auth print-access-token >/dev/null
+          
       # ==========================================
       # Deploy model to Vertex AI
       # ==========================================
