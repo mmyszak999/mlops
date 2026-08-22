@@ -1,0 +1,16 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcp-standard-rwo
+
+provisioner: pd.csi.storage.gke.io
+
+volumeBindingMode: WaitForFirstConsumer
+
+allowVolumeExpansion: true
+
+reclaimPolicy: Delete
+
+parameters:
+  type: pd-balanced
+  replication-type: none

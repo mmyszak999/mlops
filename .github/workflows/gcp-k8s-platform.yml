@@ -1,0 +1,336 @@
+name: GCP Kubernetes - Platform
+
+on:
+  workflow_dispatch:
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: us-central1
+
+      GKE_CLUSTER_NAME: mlops-thesis-gke
+
+      MLFLOW_IMAGE_TAG: v1
+
+      POSTGRES_PASSWORD: password
+
+    steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # Authenticate to Google Cloud
+      # ==========================================
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ==========================================
+      # Terraform Init
+      # ==========================================
+
+      - name: Terraform Init
+        working-directory: terraform/kubernetes/gcp
+        run: |
+          terraform init -input=false
+
+
+      # ==========================================
+      # Get Terraform outputs
+      # ==========================================
+
+      - name: Get Terraform outputs
+        working-directory: terraform/kubernetes/gcp
+        run: |
+          echo "GKE_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
+          echo "GCP_REGION=$(terraform output -raw cluster_region)" >> "$GITHUB_ENV"
+          echo "MODEL_BUCKET=$(terraform output -raw model_bucket_name)" >> "$GITHUB_ENV"
+          echo "ARTIFACT_REGISTRY_URL=$(terraform output -raw artifact_registry_repository_url)" >> "$GITHUB_ENV"
+
+          echo "GCP_TRAINING_SERVICE_ACCOUNT=$(terraform output -raw training_service_account_email)" >> "$GITHUB_ENV"
+          echo "GCP_INFERENCE_SERVICE_ACCOUNT=$(terraform output -raw inference_service_account_email)" >> "$GITHUB_ENV"
+          echo "GCP_MLFLOW_SERVICE_ACCOUNT=$(terraform output -raw mlflow_service_account_email)" >> "$GITHUB_ENV"
+
+
+      # ==========================================
+      # Check configuration
+      # ==========================================
+
+      - name: Show configuration
+        run: |
+          echo "Project: ${GCP_PROJECT_ID}"
+          echo "Region: ${GCP_REGION}"
+          echo "Cluster: ${GKE_CLUSTER_NAME}"
+          echo "Model bucket: ${MODEL_BUCKET}"
+          echo "Artifact Registry: ${ARTIFACT_REGISTRY_URL}"
+
+
+      # ==========================================
+      # Docker authentication
+      # ==========================================
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker \
+            "${GCP_REGION}-docker.pkg.dev" \
+            --quiet
+
+
+      # ==========================================
+      # Build MLflow image
+      # ==========================================
+
+      - name: Build MLflow image
+        run: |
+          docker build \
+            -f docker/mlflow/Dockerfile \
+            -t "${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-mlflow:${MLFLOW_IMAGE_TAG}" \
+            .
+
+
+      # ==========================================
+      # Push MLflow image
+      # ==========================================
+
+      - name: Push MLflow image
+        run: |
+          docker push \
+            "${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-mlflow:${MLFLOW_IMAGE_TAG}"
+
+
+      # ==========================================
+      # Configure kubectl
+      # ==========================================
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials \
+            "${GKE_CLUSTER_NAME}" \
+            --region="${GCP_REGION}" \
+            --project="${GCP_PROJECT_ID}"
+
+
+      # ==========================================
+      # Check Kubernetes access
+      # ==========================================
+
+      - name: Check Kubernetes access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes -o wide
+
+
+      # ==========================================
+      # Namespace
+      # ==========================================
+
+      - name: Apply namespace
+        run: |
+          kubectl apply \
+            -f kubernetes/namespace.yaml
+
+
+      # ==========================================
+      # GCP ServiceAccounts / Workload Identity
+      # ==========================================
+
+      - name: Prepare GCP ServiceAccounts
+        run: |
+          sed \
+            -e "s|GCP_TRAINING_SERVICE_ACCOUNT|${GCP_TRAINING_SERVICE_ACCOUNT}|g" \
+            -e "s|GCP_INFERENCE_SERVICE_ACCOUNT|${GCP_INFERENCE_SERVICE_ACCOUNT}|g" \
+            -e "s|GCP_MLFLOW_SERVICE_ACCOUNT|${GCP_MLFLOW_SERVICE_ACCOUNT}|g" \
+            kubernetes/gcp-service-accounts.yaml \
+            > /tmp/gcp-service-accounts.yaml
+
+
+      - name: Apply GCP ServiceAccounts
+        run: |
+          kubectl apply \
+            -f /tmp/gcp-service-accounts.yaml
+
+
+      # ==========================================
+      # GCP StorageClass
+      # ==========================================
+
+      - name: Apply GCP StorageClass
+        run: |
+          kubectl apply \
+            -f kubernetes/gcp-storage-class.yaml
+
+
+      # ==========================================
+      # Check StorageClass
+      # ==========================================
+
+      - name: Check StorageClass
+        run: |
+          kubectl get storageclass
+
+
+      # ==========================================
+      # PostgreSQL secret
+      # ==========================================
+
+      - name: Prepare PostgreSQL secret
+        run: |
+          sed \
+            -e "s|POSTGRES_PASSWORD_PLACEHOLDER|${POSTGRES_PASSWORD}|g" \
+            kubernetes/postgres/secret.yaml \
+            > /tmp/postgres-secret.yaml
+
+
+      # ==========================================
+      # PostgreSQL configuration
+      # ==========================================
+
+      - name: Apply PostgreSQL configuration
+        run: |
+          kubectl apply \
+            -f kubernetes/postgres/config.yaml
+
+          kubectl apply \
+            -f /tmp/postgres-secret.yaml
+
+
+      # ==========================================
+      # PostgreSQL StatefulSet
+      # ==========================================
+
+      - name: Prepare PostgreSQL StatefulSet
+        run: |
+          sed \
+            -e "s|STORAGE_CLASS_PLACEHOLDER|gcp-standard-rwo|g" \
+            kubernetes/postgres/deployment.yaml \
+            > /tmp/postgres-statefulset.yaml
+
+
+      - name: Apply PostgreSQL StatefulSet
+        run: |
+          kubectl apply \
+            -f /tmp/postgres-statefulset.yaml
+
+
+      # ==========================================
+      # PostgreSQL service
+      # ==========================================
+
+      - name: Apply PostgreSQL service
+        run: |
+          kubectl apply \
+            -f kubernetes/postgres/service.yaml
+
+
+      # ==========================================
+      # Wait for PostgreSQL
+      # ==========================================
+
+      - name: Wait for PostgreSQL
+        run: |
+          kubectl wait \
+            --for=condition=ready \
+            pod/postgres-0 \
+            -n mlops \
+            --timeout=10m
+
+
+      # ==========================================
+      # MLflow config
+      # ==========================================
+
+      - name: Prepare MLflow config
+        run: |
+          sed \
+            -e "s|ARTIFACTS_DESTINATION_PLACEHOLDER|gs://${MODEL_BUCKET}/mlflow|g" \
+            kubernetes/mlflow/config.yaml \
+            > /tmp/mlflow-config.yaml
+
+
+      - name: Apply MLflow config
+        run: |
+          kubectl apply \
+            -f /tmp/mlflow-config.yaml
+
+
+      # ==========================================
+      # MLflow deployment
+      # ==========================================
+
+      - name: Prepare MLflow Deployment
+        run: |
+          sed \
+            -e "s|MLFLOW_IMAGE_PLACEHOLDER|${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-mlflow:${MLFLOW_IMAGE_TAG}|g" \
+            kubernetes/mlflow/deployment.yaml \
+            > /tmp/mlflow-deployment.yaml
+
+
+      - name: Apply MLflow Deployment
+        run: |
+          kubectl apply \
+            -f /tmp/mlflow-deployment.yaml
+
+
+      # ==========================================
+      # MLflow service
+      # ==========================================
+
+      - name: Apply MLflow service
+        run: |
+          kubectl apply \
+            -f kubernetes/mlflow/service.yaml
+
+
+      # ==========================================
+      # Wait for MLflow
+      # ==========================================
+
+      - name: Wait for MLflow
+        run: |
+          kubectl wait \
+            --for=condition=available \
+            deployment/mlflow \
+            -n mlops \
+            --timeout=10m
+
+
+      # ==========================================
+      # Final status
+      # ==========================================
+
+      - name: Show platform status
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n mlops -o wide
+
+          echo ""
+          echo "=== Services ==="
+          kubectl get services -n mlops
+
+          echo ""
+          echo "=== PVCs ==="
+          kubectl get pvc -n mlops
+
+          echo ""
+          echo "=== StorageClasses ==="
+          kubectl get storageclass

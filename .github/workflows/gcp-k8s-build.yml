@@ -1,0 +1,217 @@
+name: GCP Kubernetes - Build Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Model version"
+        required: true
+        default: "v1"
+
+jobs:
+  build-and-train:
+    runs-on: ubuntu-latest
+
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: us-central1
+
+      MODEL_VERSION: ${{ inputs.model_version }}
+
+      GKE_CLUSTER_NAME: mlops-thesis-gke
+
+    steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # Authenticate GCP
+      # ==========================================
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      - name: Terraform Init
+        working-directory: terraform/kubernetes/gcp
+        run: |
+          terraform init -input=false
+
+
+      # ==========================================
+      # Terraform outputs
+      # ==========================================
+
+      - name: Get Terraform outputs
+        working-directory: terraform/kubernetes/gcp
+        run: |
+          echo "GKE_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
+          echo "GCP_REGION=$(terraform output -raw cluster_region)" >> "$GITHUB_ENV"
+          echo "ARTIFACT_REGISTRY_URL=$(terraform output -raw artifact_registry_repository_url)" >> "$GITHUB_ENV"
+
+          echo "GCP_TRAINING_SERVICE_ACCOUNT=$(terraform output -raw training_service_account_email)" >> "$GITHUB_ENV"
+          echo "GCP_INFERENCE_SERVICE_ACCOUNT=$(terraform output -raw inference_service_account_email)" >> "$GITHUB_ENV"
+          echo "GCP_MLFLOW_SERVICE_ACCOUNT=$(terraform output -raw mlflow_service_account_email)" >> "$GITHUB_ENV"
+
+
+      # ==========================================
+      # Docker authentication
+      # ==========================================
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker \
+            "${GCP_REGION}-docker.pkg.dev" \
+            --quiet
+
+
+      # ==========================================
+      # Build training image
+      # ==========================================
+
+      - name: Build training image
+        run: |
+          docker build \
+            -f docker/train/Dockerfile \
+            -t "${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-train:${MODEL_VERSION}" \
+            .
+
+
+      # ==========================================
+      # Push training image
+      # ==========================================
+
+      - name: Push training image
+        run: |
+          docker push \
+            "${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-train:${MODEL_VERSION}"
+
+
+      # ==========================================
+      # Configure kubectl
+      # ==========================================
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials \
+            "${GKE_CLUSTER_NAME}" \
+            --region="${GCP_REGION}" \
+            --project="${GCP_PROJECT_ID}"
+
+
+      # ==========================================
+      # Check Kubernetes
+      # ==========================================
+
+      - name: Check Kubernetes access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes -o wide
+
+
+      # ==========================================
+      # Namespace
+      # ==========================================
+
+      - name: Apply namespace
+        run: |
+          kubectl apply \
+            -f kubernetes/namespace.yaml
+
+
+      # ==========================================
+      # GCP ServiceAccounts
+      # ==========================================
+
+      - name: Prepare GCP ServiceAccounts
+        run: |
+          sed \
+            -e "s|GCP_TRAINING_SERVICE_ACCOUNT|${GCP_TRAINING_SERVICE_ACCOUNT}|g" \
+            -e "s|GCP_INFERENCE_SERVICE_ACCOUNT|${GCP_INFERENCE_SERVICE_ACCOUNT}|g" \
+            -e "s|GCP_MLFLOW_SERVICE_ACCOUNT|${GCP_MLFLOW_SERVICE_ACCOUNT}|g" \
+            kubernetes/gcp-service-accounts.yaml \
+            > /tmp/gcp-service-accounts.yaml
+
+
+      - name: Apply GCP ServiceAccounts
+        run: |
+          kubectl apply \
+            -f /tmp/gcp-service-accounts.yaml
+
+
+      # ==========================================
+      # Prepare training Job
+      # ==========================================
+
+      - name: Prepare training Job
+        run: |
+          sed \
+            -e "s|IMAGE_PLACEHOLDER|${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-train:${MODEL_VERSION}|g" \
+            -e "s|MODEL_VERSION_PLACEHOLDER|${MODEL_VERSION}|g" \
+            kubernetes/training/job.yaml \
+            > /tmp/training-job.yaml
+
+
+      # ==========================================
+      # Start training Job
+      # ==========================================
+
+      - name: Start training Job
+        run: |
+          kubectl delete job mlops-training \
+            -n mlops \
+            --ignore-not-found
+
+          kubectl apply \
+            -f /tmp/training-job.yaml
+
+
+      # ==========================================
+      # Status
+      # ==========================================
+
+      - name: Check training status
+        run: |
+          kubectl get jobs -n mlops
+          echo ""
+          kubectl get pods -n mlops -o wide
+
+
+      # ==========================================
+      # Wait
+      # ==========================================
+
+      - name: Wait for training Job
+        run: |
+          kubectl wait \
+            --for=condition=complete \
+            job/mlops-training \
+            -n mlops \
+            --timeout=30m
+
+
+      # ==========================================
+      # Logs
+      # ==========================================
+
+      - name: Show training logs
+        run: |
+          kubectl logs \
+            -n mlops \
+            job/mlops-training

@@ -1,0 +1,245 @@
+name: GCP Kubernetes - Deploy Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_version:
+        description: "Inference image version"
+        required: true
+        default: "1"
+
+      model_registry_version:
+        description: "MLflow Model Registry version"
+        required: true
+        default: "1"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: us-central1
+
+      GKE_CLUSTER_NAME: mlops-thesis-gke
+
+      IMAGE_VERSION: ${{ inputs.image_version }}
+      MODEL_REGISTRY_VERSION: ${{ inputs.model_registry_version }}
+
+    steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # Authenticate GCP
+      # ==========================================
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      - name: Terraform Init
+        working-directory: terraform/kubernetes/gcp
+        run: |
+          terraform init -input=false
+
+
+      # ==========================================
+      # Terraform outputs
+      # ==========================================
+
+      - name: Get Terraform outputs
+        working-directory: terraform/kubernetes/gcp
+        run: |
+          echo "GKE_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
+          echo "GCP_REGION=$(terraform output -raw cluster_region)" >> "$GITHUB_ENV"
+          echo "ARTIFACT_REGISTRY_URL=$(terraform output -raw artifact_registry_repository_url)" >> "$GITHUB_ENV"
+
+          echo "GCP_INFERENCE_SERVICE_ACCOUNT=$(terraform output -raw inference_service_account_email)" >> "$GITHUB_ENV"
+          echo "GCP_MLFLOW_SERVICE_ACCOUNT=$(terraform output -raw mlflow_service_account_email)" >> "$GITHUB_ENV"
+
+
+      # ==========================================
+      # Docker authentication
+      # ==========================================
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker \
+            "${GCP_REGION}-docker.pkg.dev" \
+            --quiet
+
+
+      # ==========================================
+      # Build inference image
+      # ==========================================
+
+      - name: Build inference image
+        run: |
+          docker build \
+            -f docker/inference/Dockerfile \
+            -t "${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-inference:${IMAGE_VERSION}" \
+            .
+
+
+      # ==========================================
+      # Push inference image
+      # ==========================================
+
+      - name: Push inference image
+        run: |
+          docker push \
+            "${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-inference:${IMAGE_VERSION}"
+
+
+      # ==========================================
+      # GKE credentials
+      # ==========================================
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials \
+            "${GKE_CLUSTER_NAME}" \
+            --region="${GCP_REGION}" \
+            --project="${GCP_PROJECT_ID}"
+
+
+      # ==========================================
+      # Kubernetes access
+      # ==========================================
+
+      - name: Check Kubernetes access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes -o wide
+
+
+      # ==========================================
+      # Namespace
+      # ==========================================
+
+      - name: Apply namespace
+        run: |
+          kubectl apply \
+            -f kubernetes/namespace.yaml
+
+
+      # ==========================================
+      # GCP ServiceAccounts
+      # ==========================================
+
+      - name: Prepare GCP ServiceAccounts
+        run: |
+          sed \
+            -e "s|GCP_TRAINING_SERVICE_ACCOUNT|${GCP_TRAINING_SERVICE_ACCOUNT}|g" \
+            -e "s|GCP_INFERENCE_SERVICE_ACCOUNT|${GCP_INFERENCE_SERVICE_ACCOUNT}|g" \
+            -e "s|GCP_MLFLOW_SERVICE_ACCOUNT|${GCP_MLFLOW_SERVICE_ACCOUNT}|g" \
+            kubernetes/gcp-service-accounts.yaml \
+            > /tmp/gcp-service-accounts.yaml
+      
+    
+      - name: Get Terraform outputs
+        working-directory: terraform/kubernetes/gcp
+        run: |
+          echo "GKE_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
+          echo "GCP_REGION=$(terraform output -raw cluster_region)" >> "$GITHUB_ENV"
+          echo "ARTIFACT_REGISTRY_URL=$(terraform output -raw artifact_registry_repository_url)" >> "$GITHUB_ENV"
+
+          echo "GCP_TRAINING_SERVICE_ACCOUNT=$(terraform output -raw training_service_account_email)" >> "$GITHUB_ENV"
+          echo "GCP_INFERENCE_SERVICE_ACCOUNT=$(terraform output -raw inference_service_account_email)" >> "$GITHUB_ENV"
+          echo "GCP_MLFLOW_SERVICE_ACCOUNT=$(terraform output -raw mlflow_service_account_email)" >> "$GITHUB_ENV"
+      
+      - name: Apply GCP ServiceAccounts
+        run: |
+          kubectl apply \
+            -f /tmp/gcp-service-accounts.yaml
+
+
+      # ==========================================
+      # Prepare inference deployment
+      # ==========================================
+
+      - name: Prepare inference deployment
+        run: |
+          sed \
+            -e "s|INFERENCE_IMAGE_PLACEHOLDER|${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-inference:${IMAGE_VERSION}|g" \
+            -e "s|MODEL_REGISTRY_VERSION_PLACEHOLDER|${MODEL_REGISTRY_VERSION}|g" \
+            kubernetes/inference/deployment.yaml \
+            > /tmp/inference-deployment.yaml
+
+          echo "=== Generated deployment ==="
+          cat /tmp/inference-deployment.yaml
+
+
+      # ==========================================
+      # Apply inference deployment
+      # ==========================================
+
+      - name: Apply inference deployment
+        run: |
+          kubectl apply \
+            -f /tmp/inference-deployment.yaml
+
+
+      # ==========================================
+      # Apply inference service
+      # ==========================================
+
+      - name: Apply inference service
+        run: |
+          kubectl apply \
+            -f kubernetes/inference/service.yaml
+
+
+      # ==========================================
+      # Wait
+      # ==========================================
+
+      - name: Wait for inference deployment
+        run: |
+          kubectl wait \
+            --for=condition=available \
+            deployment/mlops-inference \
+            -n mlops \
+            --timeout=10m
+
+
+      # ==========================================
+      # Status
+      # ==========================================
+
+      - name: Show pods
+        run: |
+          kubectl get pods \
+            -n mlops \
+            -o wide
+
+
+      - name: Show service
+        run: |
+          kubectl get service \
+            mlops-inference \
+            -n mlops
+
+
+      - name: Show deployment
+        run: |
+          kubectl get deployment \
+            mlops-inference \
+            -n mlops
