@@ -1,1 +1,142 @@
-a
+name: GCP Native - Deploy Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Model version to deploy"
+        required: true
+        default: "v1"
+
+jobs:
+  deploy-model:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: us-central1
+
+      MODEL_VERSION: ${{ inputs.model_version }}
+
+      MODEL_DISPLAY_NAME: titanic-random-forest
+      ENDPOINT_DISPLAY_NAME: titanic-random-forest-endpoint
+
+    steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # Authenticate to Google Cloud
+      # ==========================================
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+
+      # ==========================================
+      # Setup Python
+      # ==========================================
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ==========================================
+      # Initialize Terraform
+      # ==========================================
+
+      - name: Initialize Terraform
+        working-directory: terraform/gcp
+        run: |
+          terraform init -input=false
+
+
+      # ==========================================
+      # Get model bucket
+      # ==========================================
+
+      - name: Get model bucket
+        working-directory: terraform/gcp
+        run: |
+          echo "MODEL_BUCKET=$(terraform output -raw model_bucket_name)" >> "$GITHUB_ENV"
+
+
+      # ==========================================
+      # Show configuration
+      # ==========================================
+
+      - name: Show configuration
+        run: |
+          echo "GCP_PROJECT_ID=${GCP_PROJECT_ID}"
+          echo "GCP_REGION=${GCP_REGION}"
+          echo "MODEL_VERSION=${MODEL_VERSION}"
+          echo "MODEL_BUCKET=${MODEL_BUCKET}"
+
+
+      # ==========================================
+      # Verify model artifacts
+      # ==========================================
+
+      - name: Verify model artifacts
+        run: |
+          gcloud storage ls \
+            "gs://${MODEL_BUCKET}/models/${MODEL_VERSION}/"
+
+
+      # ==========================================
+      # Install dependencies
+      # ==========================================
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+
+          pip install \
+            -r ml/gcp/requirements.txt
+
+
+      # ==========================================
+      # Deploy model to Vertex AI
+      # ==========================================
+
+      - name: Deploy model
+        id: deploy
+        run: |
+          python ml/gcp/deploy.py
+
+
+      # ==========================================
+      # Show created resources
+      # ==========================================
+
+      - name: Show Vertex models
+        run: |
+          gcloud ai models list \
+            --region="${GCP_REGION}"
+
+
+      - name: Show Vertex endpoints
+        run: |
+          gcloud ai endpoints list \
+            --region="${GCP_REGION}"  

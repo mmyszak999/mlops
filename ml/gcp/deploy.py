@@ -27,10 +27,6 @@ ENDPOINT_DISPLAY_NAME = os.getenv(
     "titanic-random-forest-endpoint",
 )
 
-SERVING_CONTAINER_IMAGE_URI = os.environ[
-    "SERVING_CONTAINER_IMAGE_URI"
-]
-
 
 # =========================================================
 # Initialize Vertex AI
@@ -43,7 +39,7 @@ aiplatform.init(
 
 
 # =========================================================
-# Model artifacts
+# Model artifact
 # =========================================================
 
 artifact_uri = (
@@ -51,9 +47,24 @@ artifact_uri = (
     f"/models/{MODEL_VERSION}"
 )
 
+print(
+    f"Model artifact URI: {artifact_uri}"
+)
+
 
 # =========================================================
-# Upload model to Vertex Model Registry
+# Prebuilt scikit-learn serving container
+# =========================================================
+
+SERVING_CONTAINER_IMAGE_URI = (
+    "us-docker.pkg.dev/"
+    "vertex-ai/prediction/"
+    "sklearn-cpu.1-4:latest"
+)
+
+
+# =========================================================
+# Upload model to Vertex AI Model Registry
 # =========================================================
 
 model = aiplatform.Model.upload(
@@ -65,7 +76,7 @@ model = aiplatform.Model.upload(
 model.wait()
 
 print(
-    f"Model uploaded: {model.resource_name}"
+    f"Vertex model created: {model.resource_name}"
 )
 
 
@@ -80,7 +91,7 @@ endpoint = aiplatform.Endpoint.create(
 endpoint.wait()
 
 print(
-    f"Endpoint created: {endpoint.resource_name}"
+    f"Vertex endpoint created: {endpoint.resource_name}"
 )
 
 
@@ -88,9 +99,8 @@ print(
 # Deploy model
 # =========================================================
 
-endpoint.deploy(
-    model,
-    deployed_model_display_name=MODEL_DISPLAY_NAME,
+endpoint = model.deploy(
+    endpoint=endpoint,
     machine_type="e2-standard-2",
     min_replica_count=1,
     max_replica_count=1,
@@ -101,5 +111,18 @@ print(
 )
 
 print(
-    f"Endpoint: {endpoint.resource_name}"
+    f"Endpoint ID: {endpoint.name}"
 )
+
+
+# =========================================================
+# Export endpoint ID for GitHub Actions
+# =========================================================
+
+github_output = os.getenv("GITHUB_OUTPUT")
+
+if github_output:
+    with open(github_output, "a", encoding="utf-8") as file:
+        file.write(
+            f"endpoint_id={endpoint.name}\n"
+        )

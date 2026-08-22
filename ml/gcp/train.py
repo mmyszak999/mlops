@@ -1,12 +1,19 @@
 import os
 
 import joblib
-import pandas as pd
 from google.cloud import storage
 
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+
+from ml.core.data import load_data
+from ml.core.model import (
+    create_model,
+    evaluate_model,
+)
+from ml.core.pipeline_preprocessing import (
+    create_preprocessor,
+)
 
 
 # =========================================================
@@ -31,26 +38,16 @@ MODEL_BUCKET = os.environ[
 # Load data
 # =========================================================
 
-df = pd.read_csv(
+df = load_data(
     "data/data.csv"
 )
 
 
 # =========================================================
-# Preprocessing
+# Separate target and features
 # =========================================================
 
-df["Age"] = df["Age"].fillna(
-    df["Age"].median()
-)
-
-df["Embarked"] = df["Embarked"].fillna(
-    df["Embarked"].mode()[0]
-)
-
-
 y = df["Survived"]
-
 
 X = df.drop(
     columns=[
@@ -60,11 +57,6 @@ X = df.drop(
         "Ticket",
         "Cabin",
     ]
-)
-
-
-X = pd.get_dummies(
-    X
 )
 
 
@@ -82,18 +74,28 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 
 # =========================================================
-# Model
+# Build complete ML pipeline
 # =========================================================
 
-model = RandomForestClassifier(
-    n_estimators=200,
-    max_depth=10,
-    min_samples_split=5,
-    random_state=42,
+model_pipeline = Pipeline(
+    steps=[
+        (
+            "preprocessor",
+            create_preprocessor(),
+        ),
+        (
+            "model",
+            create_model(),
+        ),
+    ]
 )
 
 
-model.fit(
+# =========================================================
+# Train
+# =========================================================
+
+model_pipeline.fit(
     X_train,
     y_train,
 )
@@ -103,13 +105,10 @@ model.fit(
 # Evaluation
 # =========================================================
 
-predictions = model.predict(
-    X_test
-)
-
-accuracy = accuracy_score(
+accuracy = evaluate_model(
+    model_pipeline,
+    X_test,
     y_test,
-    predictions,
 )
 
 print(
@@ -118,62 +117,43 @@ print(
 
 
 # =========================================================
-# Save artifacts locally
+# Save complete model
 # =========================================================
 
 model_filename = "model.pkl"
-columns_filename = "columns.pkl"
 
 joblib.dump(
-    model,
+    model_pipeline,
     model_filename,
 )
 
-joblib.dump(
-    X.columns.tolist(),
-    columns_filename,
-)
-
 
 # =========================================================
-# Upload artifacts to GCS
+# Upload to GCS
 # =========================================================
 
 storage_client = storage.Client(
-    project=GCP_PROJECT_ID
+    project=GCP_PROJECT_ID,
 )
 
 bucket = storage_client.bucket(
-    MODEL_BUCKET
+    MODEL_BUCKET,
 )
 
-
-model_blob = bucket.blob(
+blob = bucket.blob(
     f"models/{MODEL_VERSION}/{model_filename}"
 )
 
-model_blob.upload_from_filename(
-    model_filename
-)
-
-
-columns_blob = bucket.blob(
-    f"models/{MODEL_VERSION}/{columns_filename}"
-)
-
-columns_blob.upload_from_filename(
-    columns_filename
+blob.upload_from_filename(
+    model_filename,
 )
 
 
 print(
-    "Model artifacts uploaded successfully:"
+    "Model uploaded successfully:"
 )
 
 print(
-    f"gs://{MODEL_BUCKET}/models/{MODEL_VERSION}/{model_filename}"
-)
-
-print(
-    f"gs://{MODEL_BUCKET}/models/{MODEL_VERSION}/{columns_filename}"
+    f"gs://{MODEL_BUCKET}/models/"
+    f"{MODEL_VERSION}/{model_filename}"
 )
