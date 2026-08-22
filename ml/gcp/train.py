@@ -1,5 +1,4 @@
 import os
-import tarfile
 
 import joblib
 import pandas as pd
@@ -10,17 +9,31 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
 
-MODEL_VERSION = os.getenv("MODEL_VERSION", "v1")
+# =========================================================
+# Configuration
+# =========================================================
 
-GCP_PROJECT_ID = os.environ["GCP_PROJECT_ID"]
-MODEL_BUCKET = os.environ["MODEL_BUCKET"]
+MODEL_VERSION = os.getenv(
+    "MODEL_VERSION",
+    "v1",
+)
+
+GCP_PROJECT_ID = os.environ[
+    "GCP_PROJECT_ID"
+]
+
+MODEL_BUCKET = os.environ[
+    "MODEL_BUCKET"
+]
 
 
 # =========================================================
 # Load data
 # =========================================================
 
-df = pd.read_csv("data/data.csv")
+df = pd.read_csv(
+    "data/data.csv"
+)
 
 
 # =========================================================
@@ -40,18 +53,19 @@ y = df["Survived"]
 
 
 X = df.drop(
-    [
+    columns=[
         "PassengerId",
         "Survived",
         "Name",
         "Ticket",
         "Cabin",
-    ],
-    axis=1,
+    ]
 )
 
 
-X = pd.get_dummies(X)
+X = pd.get_dummies(
+    X
+)
 
 
 # =========================================================
@@ -89,11 +103,13 @@ model.fit(
 # Evaluation
 # =========================================================
 
-preds = model.predict(X_test)
+predictions = model.predict(
+    X_test
+)
 
 accuracy = accuracy_score(
     y_test,
-    preds,
+    predictions,
 )
 
 print(
@@ -102,62 +118,62 @@ print(
 
 
 # =========================================================
-# Save artifacts
+# Save artifacts locally
 # =========================================================
+
+model_filename = "model.pkl"
+columns_filename = "columns.pkl"
 
 joblib.dump(
     model,
-    "model.pkl",
+    model_filename,
 )
 
 joblib.dump(
     X.columns.tolist(),
-    "columns.pkl",
+    columns_filename,
 )
 
 
 # =========================================================
-# Package model
-# =========================================================
-
-archive_name = "model.tar.gz"
-
-with tarfile.open(
-    archive_name,
-    "w:gz",
-) as tar:
-    tar.add(
-        "model.pkl",
-        arcname="model.pkl",
-    )
-
-    tar.add(
-        "columns.pkl",
-        arcname="columns.pkl",
-    )
-
-
-# =========================================================
-# Upload to GCS
+# Upload artifacts to GCS
 # =========================================================
 
 storage_client = storage.Client(
-    project=GCP_PROJECT_ID,
+    project=GCP_PROJECT_ID
 )
 
 bucket = storage_client.bucket(
-    MODEL_BUCKET,
+    MODEL_BUCKET
 )
 
-blob = bucket.blob(
-    f"models/{MODEL_VERSION}/model.tar.gz"
+
+model_blob = bucket.blob(
+    f"models/{MODEL_VERSION}/{model_filename}"
 )
 
-blob.upload_from_filename(
-    archive_name,
+model_blob.upload_from_filename(
+    model_filename
+)
+
+
+columns_blob = bucket.blob(
+    f"models/{MODEL_VERSION}/{columns_filename}"
+)
+
+columns_blob.upload_from_filename(
+    columns_filename
+)
+
+
+print(
+    "Model artifacts uploaded successfully:"
 )
 
 print(
-    f"Model {MODEL_VERSION} uploaded to "
-    f"gs://{MODEL_BUCKET}/models/{MODEL_VERSION}/model.tar.gz"
+    f"gs://{MODEL_BUCKET}/models/{MODEL_VERSION}/{model_filename}"
+)
+
+print(
+    f"gs://{MODEL_BUCKET}/models/{MODEL_VERSION}/{columns_filename}"
 )
