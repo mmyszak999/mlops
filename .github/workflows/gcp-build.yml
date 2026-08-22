@@ -19,6 +19,7 @@ jobs:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCP_REGION: us-central1
       MODEL_VERSION: ${{ inputs.model_version }}
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
 
