@@ -1,26 +1,16 @@
-import os
-
 import joblib
-import numpy as np
+import pandas as pd
 
 from google.cloud.aiplatform.prediction.predictor import Predictor
 from google.cloud.aiplatform.utils import prediction_utils
 
 
 class TitanicPredictor(Predictor):
-    """
-    Custom Vertex AI predictor for the Titanic model.
-    """
 
     def __init__(self):
         self.model = None
 
     def load(self, artifacts_uri: str):
-        """
-        Download model artifacts from GCS
-        and load the serialized sklearn pipeline.
-        """
-
         prediction_utils.download_model_artifacts(
             artifacts_uri
         )
@@ -29,54 +19,30 @@ class TitanicPredictor(Predictor):
             "model.joblib"
         )
 
-    def preprocess(
-        self,
-        prediction_input: dict,
-    ) -> np.ndarray:
-        """
-        Convert Vertex AI request into model input.
+    def preprocess(self, prediction_input: dict):
+        instances = prediction_input["instances"]
 
-        Expected request:
+        columns = [
+            "Pclass",
+            "Sex",
+            "Age",
+            "SibSp",
+            "Parch",
+            "Fare",
+            "Embarked",
+        ]
 
-        {
-            "instances": [
-                {
-                    "Pclass": 1,
-                    "Sex": "female",
-                    "Age": 12,
-                    "SibSp": 0,
-                    "Parch": 0,
-                    "Fare": 1311.2833,
-                    "Embarked": "Q"
-                }
-            ]
-        }
-        """
+        return pd.DataFrame(
+            instances,
+            columns=columns,
+        )
 
-        return prediction_input["instances"]
-
-    def predict(
-        self,
-        instances,
-    ):
-        """
-        Run prediction using the complete sklearn pipeline.
-        """
-
-        predictions = self.model.predict(
+    def predict(self, instances):
+        return self.model.predict(
             instances
         )
 
-        return predictions
-
-    def postprocess(
-        self,
-        prediction_results,
-    ) -> dict:
-        """
-        Return JSON-serializable predictions.
-        """
-
+    def postprocess(self, prediction_results):
         return {
             "predictions": [
                 int(value)
