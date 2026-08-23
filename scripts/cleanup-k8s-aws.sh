@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-TERRAFORM_DIR="terraform/kubernetes"
+TERRAFORM_DIR="terraform/kubernetes/aws"
 
 echo "=========================================="
 echo " AWS Kubernetes cleanup"

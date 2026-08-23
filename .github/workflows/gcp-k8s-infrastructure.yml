@@ -1,0 +1,99 @@
+name: GCP Kubernetes - Infrastructure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform/kubernetes/gcp
+
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+
+    steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # Authenticate to Google Cloud
+      # ==========================================
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ==========================================
+      # Terraform Init
+      # ==========================================
+
+      - name: Terraform Init
+        run: |
+          terraform init -input=false
+
+
+      # ==========================================
+      # Terraform Format
+      # ==========================================
+
+      - name: Terraform Format Check
+        run: |
+          terraform fmt -check -recursive
+
+
+      # ==========================================
+      # Terraform Validate
+      # ==========================================
+
+      - name: Terraform Validate
+        run: |
+          terraform validate
+
+
+      # ==========================================
+      # Terraform Plan
+      # ==========================================
+
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -input=false
+
+
+      # ==========================================
+      # Terraform Apply
+      # ==========================================
+
+      - name: Terraform Apply
+        run: |
+          terraform apply \
+            -input=false \
+            -auto-approve
+
+
+      # ==========================================
+      # Outputs
+      # ==========================================
+
+      - name: Terraform Outputs
+        run: |
+          terraform output
