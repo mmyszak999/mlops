@@ -38,15 +38,31 @@ jobs:
 
 
       # ==========================================
+      # Setup Google Cloud SDK
+      # ==========================================
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          install_components: gke-gcloud-auth-plugin
+
+
+      # ==========================================
       # Check GCP identity
       # ==========================================
 
       - name: Check GCP identity
         run: |
           gcloud auth list --filter=status:ACTIVE
+
           echo ""
           echo "Project:"
           gcloud config get-value project
+
+          echo ""
+          echo "GKE auth plugin:"
+          gke-gcloud-auth-plugin --version
 
 
       # ==========================================
