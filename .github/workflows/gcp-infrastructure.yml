@@ -1,4 +1,4 @@
-name: GCP - Infrastructure
+name: GCP Native - Infrastructure
 
 on:
   workflow_dispatch:
