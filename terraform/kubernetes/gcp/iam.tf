@@ -48,12 +48,16 @@ resource "google_storage_bucket_iam_member" "inference_bucket" {
   member = "serviceAccount:${google_service_account.inference.email}"
 }
 
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
 resource "google_service_account_iam_member" "training_workload_identity" {
   service_account_id = google_service_account.training.name
 
   role = "roles/iam.workloadIdentityUser"
 
-  member = "serviceAccount:${var.project_id}.svc.id.goog[mlops/mlops-training]"
+  member = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/mlops/sa/mlops-training"
 }
 
 resource "google_service_account_iam_member" "inference_workload_identity" {
@@ -61,7 +65,7 @@ resource "google_service_account_iam_member" "inference_workload_identity" {
 
   role = "roles/iam.workloadIdentityUser"
 
-  member = "serviceAccount:${var.project_id}.svc.id.goog[mlops/mlops-inference]"
+  member = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/mlops/sa/mlops-inference"
 }
 
 resource "google_service_account_iam_member" "mlflow_workload_identity" {
@@ -69,5 +73,5 @@ resource "google_service_account_iam_member" "mlflow_workload_identity" {
 
   role = "roles/iam.workloadIdentityUser"
 
-  member = "serviceAccount:${var.project_id}.svc.id.goog[mlops/mlflow]"
+  member = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/mlops/sa/mlflow"
 }

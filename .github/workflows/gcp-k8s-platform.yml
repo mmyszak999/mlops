@@ -38,6 +38,18 @@ jobs:
 
 
       # ==========================================
+      # Check GCP identity
+      # ==========================================
+
+      - name: Check GCP identity
+        run: |
+          gcloud auth list --filter=status:ACTIVE
+          echo ""
+          echo "Project:"
+          gcloud config get-value project
+
+
+      # ==========================================
       # Setup Terraform
       # ==========================================
 
@@ -63,6 +75,7 @@ jobs:
         working-directory: terraform/kubernetes/gcp
         run: |
           echo "GKE_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
+          echo "GKE_ZONE=$(terraform output -raw cluster_zone)" >> "$GITHUB_ENV"
           echo "GCP_REGION=$(terraform output -raw cluster_region)" >> "$GITHUB_ENV"
           echo "MODEL_BUCKET=$(terraform output -raw model_bucket_name)" >> "$GITHUB_ENV"
           echo "ARTIFACT_REGISTRY_URL=$(terraform output -raw artifact_registry_repository_url)" >> "$GITHUB_ENV"
@@ -80,9 +93,19 @@ jobs:
         run: |
           echo "Project: ${GCP_PROJECT_ID}"
           echo "Region: ${GCP_REGION}"
+          echo "Zone: ${GKE_ZONE}"
           echo "Cluster: ${GKE_CLUSTER_NAME}"
           echo "Model bucket: ${MODEL_BUCKET}"
           echo "Artifact Registry: ${ARTIFACT_REGISTRY_URL}"
+
+
+      # ==========================================
+      # Set active GCP project
+      # ==========================================
+
+      - name: Set GCP project
+        run: |
+          gcloud config set project "${GCP_PROJECT_ID}"
 
 
       # ==========================================
@@ -126,7 +149,7 @@ jobs:
         run: |
           gcloud container clusters get-credentials \
             "${GKE_CLUSTER_NAME}" \
-            --region="${GCP_REGION}" \
+            --zone="${GKE_ZONE}" \
             --project="${GCP_PROJECT_ID}"
 
 
@@ -256,6 +279,23 @@ jobs:
 
 
       # ==========================================
+      # PostgreSQL diagnostic
+      # ==========================================
+
+      - name: Check PostgreSQL
+        run: |
+          kubectl get pods \
+            -n mlops \
+            -l app=postgres \
+            -o wide
+
+          echo ""
+
+          kubectl get pvc \
+            -n mlops
+
+
+      # ==========================================
       # MLflow config
       # ==========================================
 
@@ -315,6 +355,24 @@ jobs:
 
 
       # ==========================================
+      # MLflow diagnostic
+      # ==========================================
+
+      - name: Check MLflow
+        run: |
+          kubectl get pods \
+            -n mlops \
+            -l app=mlflow \
+            -o wide
+
+          echo ""
+
+          kubectl get service \
+            mlflow \
+            -n mlops
+
+
+      # ==========================================
       # Final status
       # ==========================================
 
@@ -334,3 +392,7 @@ jobs:
           echo ""
           echo "=== StorageClasses ==="
           kubectl get storageclass
+
+          echo ""
+          echo "=== ServiceAccounts ==="
+          kubectl get serviceaccounts -n mlops
