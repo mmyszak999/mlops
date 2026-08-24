@@ -14,7 +14,7 @@ jobs:
     env:
       ARM_SUBSCRIPTION_ID: a71b1a56-760a-4510-9453-9525c3b99c8f
       ARM_CLIENT_ID: 53c2023d-035b-4459-a043-d5f9b50a032c
-      ARM_CLIENT_SECRET:  ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       ARM_TENANT_ID: d81a2e37-d18e-42ec-8839-9a2de1586e0c
 
     steps:
@@ -26,10 +26,13 @@ jobs:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-          client-secret: ${{ env.AZURE_CLIENT_SECRET }}
+          creds: >-
+            {
+              "clientId": "${{ env.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ env.ARM_CLIENT_SECRET }}",
+              "tenantId": "${{ env.ARM_TENANT_ID }}",
+              "subscriptionId": "${{ env.ARM_SUBSCRIPTION_ID }}"
+            }
 
 
       - name: Setup Terraform
@@ -54,16 +57,14 @@ jobs:
       - name: Terraform Plan
         run: |
           terraform plan \
-            -input=false \
-            -var="subscription_id=${ARM_SUBSCRIPTION_ID}"
+            -input=false
 
 
       - name: Terraform Apply
         run: |
           terraform apply \
             -input=false \
-            -auto-approve \
-            -var="subscription_id=${ARM_SUBSCRIPTION_ID}"
+            -auto-approve
 
 
       - name: Terraform Outputs
