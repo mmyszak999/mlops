@@ -32,6 +32,14 @@ resource "google_storage_bucket_iam_member" "mlflow_bucket" {
   member = "serviceAccount:${google_service_account.mlflow.email}"
 }
 
+resource "google_storage_bucket_iam_member" "mlflow_bucket_viewer" {
+  bucket = google_storage_bucket.models.name
+
+  role = "roles/storage.bucketViewer"
+
+  member = "serviceAccount:${google_service_account.mlflow.email}"
+}
+
 resource "google_storage_bucket_iam_member" "training_bucket" {
   bucket = google_storage_bucket.models.name
 
