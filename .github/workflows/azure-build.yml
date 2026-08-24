@@ -1,0 +1,53 @@
+name: Azure Native - Build Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Model version"
+        required: true
+        default: "1"
+
+jobs:
+  build-model:
+    runs-on: ubuntu-latest
+
+    env:
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: mlops-thesis-azure
+      AZURE_ML_WORKSPACE: mlops-thesis-aml
+
+      MODEL_VERSION: ${{ inputs.model_version }}
+      MODEL_NAME: titanic-random-forest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ml/azure/requirements.txt
+
+
+      - name: Train and register model
+        run: |
+          PYTHONPATH="${GITHUB_WORKSPACE}" \
+          python ml/azure/train.py
