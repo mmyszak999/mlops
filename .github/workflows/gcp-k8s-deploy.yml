@@ -70,9 +70,12 @@ jobs:
           echo "GKE_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
           echo "GCP_REGION=$(terraform output -raw cluster_region)" >> "$GITHUB_ENV"
           echo "ARTIFACT_REGISTRY_URL=$(terraform output -raw artifact_registry_repository_url)" >> "$GITHUB_ENV"
+          echo "GKE_ZONE=$(terraform output -raw cluster_zone)" >> "$GITHUB_ENV"
 
           echo "GCP_INFERENCE_SERVICE_ACCOUNT=$(terraform output -raw inference_service_account_email)" >> "$GITHUB_ENV"
           echo "GCP_MLFLOW_SERVICE_ACCOUNT=$(terraform output -raw mlflow_service_account_email)" >> "$GITHUB_ENV"
+          echo "GCP_TRAINING_SERVICE_ACCOUNT=$(terraform output -raw training_service_account_email)" >> "$GITHUB_ENV"
+
 
 
       # ==========================================
@@ -107,7 +110,18 @@ jobs:
           docker push \
             "${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-inference:${IMAGE_VERSION}"
 
-
+      
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          install_components: gke-gcloud-auth-plugin
+      
+      - name: Show GKE configuration
+        run: |
+          echo "Project: ${GCP_PROJECT_ID}"
+          echo "Cluster: ${GKE_CLUSTER_NAME}"
+          echo "Zone: ${GKE_ZONE}"
       # ==========================================
       # GKE credentials
       # ==========================================
@@ -116,7 +130,7 @@ jobs:
         run: |
           gcloud container clusters get-credentials \
             "${GKE_CLUSTER_NAME}" \
-            --region="${GCP_REGION}" \
+            --zone="${GKE_ZONE}" \
             --project="${GCP_PROJECT_ID}"
 
 
