@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_PROJECT_ID: project-6e2348ec-04b1-4ad0-9e5
       GCP_REGION: us-central1
 
       GKE_CLUSTER_NAME: mlops-thesis-gke
