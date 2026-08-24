@@ -41,12 +41,46 @@ jobs:
 
 
       # ==========================================
+      # Setup gcloud
+      # ==========================================
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          install_components: gke-gcloud-auth-plugin
+
+
+      # ==========================================
+      # Check GCP configuration
+      # ==========================================
+
+      - name: Check GCP configuration
+        run: |
+          echo "Project: ${GCP_PROJECT_ID}"
+          echo "Region: ${GCP_REGION}"
+          echo "Cluster: ${GKE_CLUSTER_NAME}"
+
+          echo ""
+          echo "Active identity:"
+          gcloud auth list --filter=status:ACTIVE
+
+          echo ""
+          echo "GKE auth plugin:"
+          gke-gcloud-auth-plugin --version
+
+
+      # ==========================================
       # Setup Terraform
       # ==========================================
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+
+      # ==========================================
+      # Terraform Init
+      # ==========================================
 
       - name: Terraform Init
         working-directory: terraform/kubernetes/gcp
@@ -62,12 +96,37 @@ jobs:
         working-directory: terraform/kubernetes/gcp
         run: |
           echo "GKE_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
+          echo "GKE_ZONE=$(terraform output -raw cluster_zone)" >> "$GITHUB_ENV"
           echo "GCP_REGION=$(terraform output -raw cluster_region)" >> "$GITHUB_ENV"
+
           echo "ARTIFACT_REGISTRY_URL=$(terraform output -raw artifact_registry_repository_url)" >> "$GITHUB_ENV"
 
           echo "GCP_TRAINING_SERVICE_ACCOUNT=$(terraform output -raw training_service_account_email)" >> "$GITHUB_ENV"
           echo "GCP_INFERENCE_SERVICE_ACCOUNT=$(terraform output -raw inference_service_account_email)" >> "$GITHUB_ENV"
           echo "GCP_MLFLOW_SERVICE_ACCOUNT=$(terraform output -raw mlflow_service_account_email)" >> "$GITHUB_ENV"
+
+
+      # ==========================================
+      # Show Terraform outputs
+      # ==========================================
+
+      - name: Show Terraform outputs
+        run: |
+          echo "Project: ${GCP_PROJECT_ID}"
+          echo "Region: ${GCP_REGION}"
+          echo "Zone: ${GKE_ZONE}"
+          echo "Cluster: ${GKE_CLUSTER_NAME}"
+          echo "Artifact Registry: ${ARTIFACT_REGISTRY_URL}"
+          echo "Model version: ${MODEL_VERSION}"
+
+
+      # ==========================================
+      # Set GCP project
+      # ==========================================
+
+      - name: Set GCP project
+        run: |
+          gcloud config set project "${GCP_PROJECT_ID}"
 
 
       # ==========================================
@@ -111,17 +170,20 @@ jobs:
         run: |
           gcloud container clusters get-credentials \
             "${GKE_CLUSTER_NAME}" \
-            --region="${GCP_REGION}" \
+            --zone="${GKE_ZONE}" \
             --project="${GCP_PROJECT_ID}"
 
 
       # ==========================================
-      # Check Kubernetes
+      # Check Kubernetes access
       # ==========================================
 
       - name: Check Kubernetes access
         run: |
           kubectl cluster-info
+
+          echo ""
+          echo "=== Nodes ==="
           kubectl get nodes -o wide
 
 
@@ -156,6 +218,16 @@ jobs:
 
 
       # ==========================================
+      # Check ServiceAccounts
+      # ==========================================
+
+      - name: Check ServiceAccounts
+        run: |
+          kubectl get serviceaccounts \
+            -n mlops
+
+
+      # ==========================================
       # Prepare training Job
       # ==========================================
 
@@ -166,6 +238,9 @@ jobs:
             -e "s|MODEL_VERSION_PLACEHOLDER|${MODEL_VERSION}|g" \
             kubernetes/training/job.yaml \
             > /tmp/training-job.yaml
+
+          echo "=== Generated training Job ==="
+          cat /tmp/training-job.yaml
 
 
       # ==========================================
@@ -183,18 +258,24 @@ jobs:
 
 
       # ==========================================
-      # Status
+      # Show training status
       # ==========================================
 
       - name: Check training status
         run: |
-          kubectl get jobs -n mlops
+          echo "=== Jobs ==="
+          kubectl get jobs \
+            -n mlops
+
           echo ""
-          kubectl get pods -n mlops -o wide
+          echo "=== Pods ==="
+          kubectl get pods \
+            -n mlops \
+            -o wide
 
 
       # ==========================================
-      # Wait
+      # Wait for training Job
       # ==========================================
 
       - name: Wait for training Job
@@ -207,7 +288,7 @@ jobs:
 
 
       # ==========================================
-      # Logs
+      # Show training logs
       # ==========================================
 
       - name: Show training logs
