@@ -1,6 +1,7 @@
-boto3
-sagemaker==2.224.4
-scikit-learn==1.2.2
+azure-ai-ml
+azure-identity
+mlflow
+scikit-learn==1.4.2
 pandas
+numpy==1.26.4
 joblib
-numpy
