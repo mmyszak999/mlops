@@ -153,6 +153,13 @@ with mlflow.start_run() as run:
     mlflow.sklearn.log_model(
         sk_model=model,
         artifact_path="model",
+        pip_requirements=[
+            "mlflow==2.16.2",
+            "scikit-learn==1.4.2",
+            "numpy==1.26.4",
+            "scipy==1.17.1",
+            "cloudpickle==3.1.2",
+        ],
     )
 
     run_id = run.info.run_id
