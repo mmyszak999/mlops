@@ -1,7 +1,7 @@
 azure-ai-ml
 azure-identity
 azureml-mlflow
-mlflow
+mlflow==2.16.2
 scikit-learn==1.4.2
 pandas
 numpy==1.26.4

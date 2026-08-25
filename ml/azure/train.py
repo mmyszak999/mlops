@@ -149,9 +149,10 @@ with mlflow.start_run() as run:
         len(feature_columns),
     )
 
+    # MLflow 2.16.x compatible API
     mlflow.sklearn.log_model(
         sk_model=model,
-        name="model",
+        artifact_path="model",
     )
 
     run_id = run.info.run_id
