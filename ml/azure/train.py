@@ -149,17 +149,40 @@ with mlflow.start_run() as run:
         len(feature_columns),
     )
 
-    # MLflow 2.16.x compatible API
+    # =====================================================
+    # Explicit inference environment
+    # =====================================================
+
+    conda_env = {
+        "name": "mlflow-env",
+        "channels": [
+            "conda-forge",
+        ],
+        "dependencies": [
+            "python=3.12.3",
+            "pip=23.1.2",
+            {
+                "pip": [
+                    "mlflow==2.16.2",
+                    "scikit-learn==1.4.2",
+                    "numpy==1.26.4",
+                    "scipy==1.17.1",
+                    "cloudpickle==3.1.2",
+                    "azureml-inference-server-http",
+                    "azureml-ai-monitoring",
+                ],
+            },
+        ],
+    }
+
+    # =====================================================
+    # Log model
+    # =====================================================
+
     mlflow.sklearn.log_model(
         sk_model=model,
         artifact_path="model",
-        pip_requirements=[
-            "mlflow==2.16.2",
-            "scikit-learn==1.4.2",
-            "numpy==1.26.4",
-            "scipy==1.17.1",
-            "cloudpickle==3.1.2",
-        ],
+        conda_env=conda_env,
     )
 
     run_id = run.info.run_id

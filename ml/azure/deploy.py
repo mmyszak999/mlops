@@ -72,9 +72,7 @@ model = ml_client.models.get(
     version=MODEL_VERSION,
 )
 
-print(
-    "Using model:"
-)
+print("Using model:")
 
 print(
     f"name={model.name}"
@@ -117,7 +115,41 @@ print(
 
 
 # =========================================================
-# Create or update deployment
+# Delete existing deployment
+# =========================================================
+
+print(
+    f"Checking existing deployment: {DEPLOYMENT_NAME}"
+)
+
+try:
+    ml_client.online_deployments.begin_delete(
+        name=DEPLOYMENT_NAME,
+        endpoint_name=ENDPOINT_NAME,
+    ).result()
+
+    print(
+        f"Existing deployment deleted: "
+        f"{DEPLOYMENT_NAME}"
+    )
+
+except Exception as exc:
+    message = str(exc).lower()
+
+    if (
+        "not found" in message
+        or "resourcenotfound" in message
+    ):
+        print(
+            f"Deployment does not exist: "
+            f"{DEPLOYMENT_NAME}"
+        )
+    else:
+        raise
+
+
+# =========================================================
+# Create deployment
 # =========================================================
 
 deployment = ManagedOnlineDeployment(
@@ -129,7 +161,7 @@ deployment = ManagedOnlineDeployment(
 )
 
 print(
-    f"Creating/updating deployment: {DEPLOYMENT_NAME}"
+    f"Creating deployment: {DEPLOYMENT_NAME}"
 )
 
 deployment = (
@@ -176,6 +208,14 @@ print(
 
 print(
     f"Endpoint name: {endpoint.name}"
+)
+
+print(
+    f"Deployment name: {DEPLOYMENT_NAME}"
+)
+
+print(
+    f"Model version: {MODEL_VERSION}"
 )
 
 print(
