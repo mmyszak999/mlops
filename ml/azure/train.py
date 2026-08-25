@@ -4,8 +4,6 @@ import mlflow
 import mlflow.sklearn
 
 from azure.ai.ml import MLClient
-from azure.ai.ml.entities import Model
-from azure.ai.ml.constants import AssetTypes
 from azure.identity import DefaultAzureCredential
 
 from ml.core.data import load_data
@@ -33,14 +31,14 @@ AZURE_ML_WORKSPACE = os.environ[
     "AZURE_ML_WORKSPACE"
 ]
 
-MODEL_VERSION = os.getenv(
-    "MODEL_VERSION",
-    "1",
-)
-
 MODEL_NAME = os.getenv(
     "MODEL_NAME",
     "titanic-random-forest",
+)
+
+MODEL_VERSION = os.getenv(
+    "MODEL_VERSION",
+    "1",
 )
 
 
@@ -59,6 +57,23 @@ ml_client = MLClient(
 
 
 # =========================================================
+# MLflow tracking
+# =========================================================
+
+workspace = ml_client.workspaces.get(
+    AZURE_ML_WORKSPACE
+)
+
+mlflow.set_tracking_uri(
+    workspace.mlflow_tracking_uri
+)
+
+mlflow.set_experiment(
+    "titanic"
+)
+
+
+# =========================================================
 # Load data
 # =========================================================
 
@@ -71,7 +86,13 @@ df = load_data(
 # Preprocessing
 # =========================================================
 
-X, y = preprocess_data(
+(
+    X_train,
+    X_test,
+    y_train,
+    y_test,
+    feature_columns,
+) = preprocess_data(
     df
 )
 
@@ -84,8 +105,8 @@ model = create_model()
 
 model = train_model(
     model,
-    X,
-    y,
+    X_train,
+    y_train,
 )
 
 
@@ -95,8 +116,8 @@ model = train_model(
 
 accuracy = evaluate_model(
     model,
-    X,
-    y,
+    X_test,
+    y_test,
 )
 
 print(
@@ -105,18 +126,8 @@ print(
 
 
 # =========================================================
-# MLflow
+# MLflow run
 # =========================================================
-
-mlflow.set_tracking_uri(
-    ml_client.workspaces.get(
-        AZURE_ML_WORKSPACE
-    ).mlflow_tracking_uri
-)
-
-mlflow.set_experiment(
-    "titanic"
-)
 
 with mlflow.start_run() as run:
 
@@ -125,45 +136,50 @@ with mlflow.start_run() as run:
         MODEL_VERSION,
     )
 
+    mlflow.log_param(
+        "model_name",
+        MODEL_NAME,
+    )
+
     mlflow.log_metric(
         "accuracy",
         accuracy,
     )
 
+    mlflow.log_param(
+        "n_features",
+        len(feature_columns),
+    )
+
     mlflow.sklearn.log_model(
-        model,
+        sk_model=model,
         name="model",
     )
 
     run_id = run.info.run_id
 
     print(
-        f"MLflow run: {run_id}"
+        f"MLflow run ID: {run_id}"
     )
 
 
 # =========================================================
-# Register MLflow model
+# Register model in Azure ML / MLflow Registry
 # =========================================================
 
-model_asset = Model(
-    path=f"runs:/{run_id}/model",
+registered_model = mlflow.register_model(
+    model_uri=f"runs:/{run_id}/model",
     name=MODEL_NAME,
-    type=AssetTypes.MLFLOW_MODEL,
-)
-
-registered_model = ml_client.models.create_or_update(
-    model_asset
 )
 
 print(
-    "Model registered:"
+    "Model registered successfully:"
 )
 
 print(
-    f"name={registered_model.name}"
+    f"model_name={registered_model.name}"
 )
 
 print(
-    f"version={registered_model.version}"
+    f"model_version={registered_model.version}"
 )

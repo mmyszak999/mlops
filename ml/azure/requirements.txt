@@ -1,5 +1,6 @@
 azure-ai-ml
 azure-identity
+azureml-mlflow
 mlflow
 scikit-learn==1.4.2
 pandas

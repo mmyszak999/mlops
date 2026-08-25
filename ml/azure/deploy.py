@@ -29,10 +29,9 @@ MODEL_NAME = os.getenv(
     "titanic-random-forest",
 )
 
-MODEL_VERSION = os.getenv(
-    "MODEL_VERSION",
-    "1",
-)
+MODEL_VERSION = os.environ[
+    "MODEL_VERSION"
+]
 
 ENDPOINT_NAME = os.getenv(
     "ENDPOINT_NAME",
@@ -42,6 +41,11 @@ ENDPOINT_NAME = os.getenv(
 DEPLOYMENT_NAME = os.getenv(
     "DEPLOYMENT_NAME",
     "blue",
+)
+
+INSTANCE_TYPE = os.getenv(
+    "INSTANCE_TYPE",
+    "Standard_DS2_v2",
 )
 
 
@@ -69,8 +73,19 @@ model = ml_client.models.get(
 )
 
 print(
-    f"Using model: "
-    f"{model.name} v{model.version}"
+    f"Using model:"
+)
+
+print(
+    f"name={model.name}"
+)
+
+print(
+    f"version={model.version}"
+)
+
+print(
+    f"type={model.type}"
 )
 
 
@@ -80,12 +95,12 @@ print(
 
 endpoint = ManagedOnlineEndpoint(
     name=ENDPOINT_NAME,
-    description="Titanic Random Forest endpoint",
+    description="Titanic Random Forest managed online endpoint",
     auth_mode="key",
 )
 
 print(
-    f"Creating endpoint: "
+    f"Creating/updating endpoint: "
     f"{ENDPOINT_NAME}"
 )
 
@@ -98,7 +113,7 @@ endpoint = (
 )
 
 print(
-    f"Endpoint created: "
+    f"Endpoint ready: "
     f"{endpoint.name}"
 )
 
@@ -111,12 +126,12 @@ deployment = ManagedOnlineDeployment(
     name=DEPLOYMENT_NAME,
     endpoint_name=ENDPOINT_NAME,
     model=model,
-    instance_type="Standard_DS2_v2",
+    instance_type=INSTANCE_TYPE,
     instance_count=1,
 )
 
 print(
-    f"Creating deployment: "
+    f"Creating/updating deployment: "
     f"{DEPLOYMENT_NAME}"
 )
 
@@ -129,13 +144,13 @@ deployment = (
 )
 
 print(
-    f"Deployment created: "
+    f"Deployment ready: "
     f"{deployment.name}"
 )
 
 
 # =========================================================
-# Route 100% traffic
+# Route traffic
 # =========================================================
 
 endpoint = ml_client.online_endpoints.get(
@@ -154,12 +169,18 @@ endpoint = (
     .result()
 )
 
+
+# =========================================================
+# Output
+# =========================================================
+
 print(
-    "Traffic configured:"
+    "Deployment completed."
 )
 
 print(
-    endpoint.traffic
+    f"Endpoint name: "
+    f"{endpoint.name}"
 )
 
 print(

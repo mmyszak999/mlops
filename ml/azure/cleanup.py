@@ -4,6 +4,10 @@ from azure.ai.ml import MLClient
 from azure.identity import DefaultAzureCredential
 
 
+# =========================================================
+# Configuration
+# =========================================================
+
 AZURE_SUBSCRIPTION_ID = os.environ[
     "AZURE_SUBSCRIPTION_ID"
 ]
@@ -22,6 +26,10 @@ ENDPOINT_NAME = os.getenv(
 )
 
 
+# =========================================================
+# Azure ML client
+# =========================================================
+
 credential = DefaultAzureCredential()
 
 ml_client = MLClient(
@@ -32,17 +40,45 @@ ml_client = MLClient(
 )
 
 
+# =========================================================
+# Delete endpoint
+# =========================================================
+
+print(
+    f"Deleting endpoint: "
+    f"{ENDPOINT_NAME}"
+)
+
 try:
-    ml_client.online_endpoints.begin_delete(
-        ENDPOINT_NAME,
-        delete_deployments=True,
-    ).result()
-
-    print(
-        f"Endpoint deleted: {ENDPOINT_NAME}"
+    operation = (
+        ml_client.online_endpoints
+        .begin_delete(
+            ENDPOINT_NAME
+        )
     )
 
-except Exception as e:
+    operation.result()
+
     print(
-        f"Endpoint delete error: {e}"
+        f"Endpoint deleted: "
+        f"{ENDPOINT_NAME}"
     )
+
+except Exception as exc:
+    message = str(exc)
+
+    if (
+        "ResourceNotFound" in message
+        or "not found" in message.lower()
+    ):
+        print(
+            f"Endpoint does not exist: "
+            f"{ENDPOINT_NAME}"
+        )
+    else:
+        raise
+
+
+print(
+    "Azure ML native cleanup completed."
+)
