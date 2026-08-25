@@ -13,7 +13,7 @@ from azure.identity import DefaultAzureCredential
 # =========================================================
 
 AZURE_SUBSCRIPTION_ID = os.environ[
-    "AZURE_SUBSCRIPTION_ID"
+    "ARM_SUBSCRIPTION_ID"
 ]
 
 AZURE_RESOURCE_GROUP = os.environ[
@@ -73,7 +73,7 @@ model = ml_client.models.get(
 )
 
 print(
-    f"Using model:"
+    "Using model:"
 )
 
 print(
@@ -90,7 +90,7 @@ print(
 
 
 # =========================================================
-# Create endpoint
+# Create or update endpoint
 # =========================================================
 
 endpoint = ManagedOnlineEndpoint(
@@ -100,8 +100,7 @@ endpoint = ManagedOnlineEndpoint(
 )
 
 print(
-    f"Creating/updating endpoint: "
-    f"{ENDPOINT_NAME}"
+    f"Creating/updating endpoint: {ENDPOINT_NAME}"
 )
 
 endpoint = (
@@ -113,13 +112,12 @@ endpoint = (
 )
 
 print(
-    f"Endpoint ready: "
-    f"{endpoint.name}"
+    f"Endpoint ready: {endpoint.name}"
 )
 
 
 # =========================================================
-# Create deployment
+# Create or update deployment
 # =========================================================
 
 deployment = ManagedOnlineDeployment(
@@ -131,8 +129,7 @@ deployment = ManagedOnlineDeployment(
 )
 
 print(
-    f"Creating/updating deployment: "
-    f"{DEPLOYMENT_NAME}"
+    f"Creating/updating deployment: {DEPLOYMENT_NAME}"
 )
 
 deployment = (
@@ -144,8 +141,7 @@ deployment = (
 )
 
 print(
-    f"Deployment ready: "
-    f"{deployment.name}"
+    f"Deployment ready: {deployment.name}"
 )
 
 
@@ -179,11 +175,9 @@ print(
 )
 
 print(
-    f"Endpoint name: "
-    f"{endpoint.name}"
+    f"Endpoint name: {endpoint.name}"
 )
 
 print(
-    f"Scoring URI: "
-    f"{endpoint.scoring_uri}"
+    f"Scoring URI: {endpoint.scoring_uri}"
 )

@@ -13,7 +13,11 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_SUBSCRIPTION_ID: a71b1a56-760a-4510-9453-9525c3b99c8f
+      ARM_CLIENT_ID: 53c2023d-035b-4459-a043-d5f9b50a032c
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_TENANT_ID: d81a2e37-d18e-42ec-8839-9a2de1586e0c
+
       AZURE_RESOURCE_GROUP: mlops-thesis-azure
       AZURE_ML_WORKSPACE: mlops-thesis-aml
 
@@ -25,18 +29,45 @@ jobs:
 
     steps:
 
+      # ==========================================
+      # Checkout
+      # ==========================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
+      # ==========================================
+      # Azure login
+      # ==========================================
+
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          creds: >-
+            {
+              "clientId": "${{ env.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ env.ARM_CLIENT_SECRET }}",
+              "tenantId": "${{ env.ARM_TENANT_ID }}",
+              "subscriptionId": "${{ env.ARM_SUBSCRIPTION_ID }}"
+            }
 
+
+      # ==========================================
+      # Check Azure identity
+      # ==========================================
+
+      - name: Check Azure identity
+        run: |
+          az account show \
+            --subscription "${ARM_SUBSCRIPTION_ID}" \
+            --query "{name:name,id:id,tenantId:tenantId,state:state}" \
+            -o table
+
+
+      # ==========================================
+      # Setup Python
+      # ==========================================
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -44,11 +75,64 @@ jobs:
           python-version: "3.11"
 
 
+      # ==========================================
+      # Install dependencies
+      # ==========================================
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r ml/azure/requirements.txt
 
+          pip install \
+            -r ml/azure/requirements.txt
+
+
+      # ==========================================
+      # Show configuration
+      # ==========================================
+
+      - name: Show configuration
+        run: |
+          echo "Subscription: ${ARM_SUBSCRIPTION_ID}"
+          echo "Resource group: ${AZURE_RESOURCE_GROUP}"
+          echo "Workspace: ${AZURE_ML_WORKSPACE}"
+          echo "Model: ${MODEL_NAME}"
+          echo "Model version: ${MODEL_VERSION}"
+          echo "Endpoint: ${ENDPOINT_NAME}"
+          echo "Deployment: ${DEPLOYMENT_NAME}"
+
+
+      # ==========================================
+      # Verify Azure ML workspace
+      # ==========================================
+
+      - name: Verify Azure ML workspace
+        run: |
+          az ml workspace show \
+            --name "${AZURE_ML_WORKSPACE}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --subscription "${ARM_SUBSCRIPTION_ID}" \
+            --query "{name:name,location:location}" \
+            -o table
+
+
+      # ==========================================
+      # Check model version
+      # ==========================================
+
+      - name: Check registered model
+        run: |
+          az ml model show \
+            --name "${MODEL_NAME}" \
+            --version "${MODEL_VERSION}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --workspace-name "${AZURE_ML_WORKSPACE}" \
+            --subscription "${ARM_SUBSCRIPTION_ID}"
+
+
+      # ==========================================
+      # Deploy Azure ML endpoint
+      # ==========================================
 
       - name: Deploy Azure ML endpoint
         run: |
