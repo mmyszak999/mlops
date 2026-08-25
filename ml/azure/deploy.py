@@ -45,7 +45,7 @@ DEPLOYMENT_NAME = os.getenv(
 
 INSTANCE_TYPE = os.getenv(
     "INSTANCE_TYPE",
-    "Standard_DS3_v2",
+    "Standard_DS2_v2",
 )
 
 
