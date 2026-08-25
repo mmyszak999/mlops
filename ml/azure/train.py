@@ -2,6 +2,7 @@ import os
 
 import mlflow
 import mlflow.sklearn
+from mlflow.models import infer_signature
 
 from azure.ai.ml import MLClient
 from azure.identity import DefaultAzureCredential
@@ -150,6 +151,34 @@ with mlflow.start_run() as run:
     )
 
     # =====================================================
+    # MLflow model signature
+    # =====================================================
+
+    model_predictions = model.predict(
+        X_train
+    )
+
+    signature = infer_signature(
+        X_train,
+        model_predictions,
+    )
+
+    input_example = X_train.iloc[[0]]
+
+    print(
+        "Model input columns:"
+    )
+
+    print(
+        list(X_train.columns)
+    )
+
+    print(
+        f"Model input example: "
+        f"{input_example.to_dict(orient='records')}"
+    )
+
+    # =====================================================
     # Explicit inference environment
     # =====================================================
 
@@ -183,6 +212,8 @@ with mlflow.start_run() as run:
         sk_model=model,
         artifact_path="model",
         conda_env=conda_env,
+        signature=signature,
+        input_example=input_example,
     )
 
     run_id = run.info.run_id
