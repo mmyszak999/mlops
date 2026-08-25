@@ -1,0 +1,327 @@
+name: Azure Kubernetes - Platform
+
+on:
+  workflow_dispatch:
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+
+    env:
+      ARM_SUBSCRIPTION_ID: a71b1a56-760a-4510-9453-9525c3b99c8f
+      ARM_CLIENT_ID: 53c2023d-035b-4459-a043-d5f9b50a032c
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_TENANT_ID: d81a2e37-d18e-42ec-8839-9a2de1586e0c
+
+      AZURE_RESOURCE_GROUP: mlops-thesis-aks
+      GKE_NAMESPACE: mlops
+
+      POSTGRES_PASSWORD: password
+
+      MLFLOW_IMAGE_TAG: v1
+
+    steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # Azure Login
+      # ==========================================
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: >-
+            {
+              "clientId": "${{ env.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ env.ARM_CLIENT_SECRET }}",
+              "tenantId": "${{ env.ARM_TENANT_ID }}",
+              "subscriptionId": "${{ env.ARM_SUBSCRIPTION_ID }}"
+            }
+
+
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ==========================================
+      # Terraform Init
+      # ==========================================
+
+      - name: Terraform Init
+        working-directory: terraform/kubernetes/azure
+        run: |
+          terraform init \
+            -input=false
+
+
+      # ==========================================
+      # Get Terraform outputs
+      # ==========================================
+
+      - name: Get Terraform outputs
+        working-directory: terraform/kubernetes/azure
+        run: |
+          echo "AKS_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
+          echo "AKS_RESOURCE_GROUP=$(terraform output -raw resource_group_name)" >> "$GITHUB_ENV"
+          echo "AZURE_REGION=$(terraform output -raw cluster_region)" >> "$GITHUB_ENV"
+
+          echo "ACR_NAME=$(terraform output -raw acr_name)" >> "$GITHUB_ENV"
+          echo "ACR_LOGIN_SERVER=$(terraform output -raw acr_login_server)" >> "$GITHUB_ENV"
+
+          echo "MODEL_STORAGE_ACCOUNT=$(terraform output -raw model_storage_account_name)" >> "$GITHUB_ENV"
+
+          echo "TRAINING_IDENTITY_CLIENT_ID=$(terraform output -raw training_identity_client_id)" >> "$GITHUB_ENV"
+          echo "INFERENCE_IDENTITY_CLIENT_ID=$(terraform output -raw inference_identity_client_id)" >> "$GITHUB_ENV"
+          echo "MLFLOW_IDENTITY_CLIENT_ID=$(terraform output -raw mlflow_identity_client_id)" >> "$GITHUB_ENV"
+
+
+      # ==========================================
+      # Show configuration
+      # ==========================================
+
+      - name: Show configuration
+        run: |
+          echo "Subscription: ${ARM_SUBSCRIPTION_ID}"
+          echo "Resource group: ${AKS_RESOURCE_GROUP}"
+          echo "Region: ${AZURE_REGION}"
+          echo "Cluster: ${AKS_CLUSTER_NAME}"
+          echo "ACR: ${ACR_LOGIN_SERVER}"
+          echo "Storage: ${MODEL_STORAGE_ACCOUNT}"
+
+
+      # ==========================================
+      # Get AKS credentials
+      # ==========================================
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group "${AKS_RESOURCE_GROUP}" \
+            --name "${AKS_CLUSTER_NAME}" \
+            --overwrite-existing
+
+
+      # ==========================================
+      # Check Kubernetes
+      # ==========================================
+
+      - name: Check Kubernetes access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes -o wide
+
+
+      # ==========================================
+      # Configure Docker for ACR
+      # ==========================================
+
+      - name: Login to Azure Container Registry
+        run: |
+          az acr login \
+            --name "${ACR_NAME}"
+
+
+      # ==========================================
+      # Build MLflow image
+      # ==========================================
+
+      - name: Build MLflow image
+        run: |
+          docker build \
+            -f docker/mlflow/Dockerfile \
+            -t "${ACR_LOGIN_SERVER}/mlops-thesis-k8s-mlflow:${MLFLOW_IMAGE_TAG}" \
+            .
+
+
+      # ==========================================
+      # Push MLflow image
+      # ==========================================
+
+      - name: Push MLflow image
+        run: |
+          docker push \
+            "${ACR_LOGIN_SERVER}/mlops-thesis-k8s-mlflow:${MLFLOW_IMAGE_TAG}"
+
+
+      # ==========================================
+      # Namespace
+      # ==========================================
+
+      - name: Apply namespace
+        run: |
+          kubectl apply \
+            -f kubernetes/namespace.yaml
+
+
+      # ==========================================
+      # Azure Workload Identity ServiceAccounts
+      # ==========================================
+
+      - name: Prepare Azure ServiceAccounts
+        run: |
+          sed \
+            -e "s|TRAINING_IDENTITY_CLIENT_ID|${TRAINING_IDENTITY_CLIENT_ID}|g" \
+            -e "s|INFERENCE_IDENTITY_CLIENT_ID|${INFERENCE_IDENTITY_CLIENT_ID}|g" \
+            -e "s|MLFLOW_IDENTITY_CLIENT_ID|${MLFLOW_IDENTITY_CLIENT_ID}|g" \
+            kubernetes/azure-service-accounts.yaml \
+            > /tmp/azure-service-accounts.yaml
+
+
+      - name: Apply Azure ServiceAccounts
+        run: |
+          kubectl apply \
+            -f /tmp/azure-service-accounts.yaml
+
+
+      # ==========================================
+      # PostgreSQL secret
+      # ==========================================
+
+      - name: Prepare PostgreSQL secret
+        run: |
+          sed \
+            -e "s|POSTGRES_PASSWORD_PLACEHOLDER|${POSTGRES_PASSWORD}|g" \
+            kubernetes/postgres/secret.yaml \
+            > /tmp/postgres-secret.yaml
+
+
+      # ==========================================
+      # PostgreSQL configuration
+      # ==========================================
+
+      - name: Apply PostgreSQL configuration
+        run: |
+          kubectl apply \
+            -f kubernetes/postgres/config.yaml
+
+          kubectl apply \
+            -f /tmp/postgres-secret.yaml
+
+
+      # ==========================================
+      # PostgreSQL StatefulSet
+      # ==========================================
+
+      - name: Prepare PostgreSQL StatefulSet
+        run: |
+          sed \
+            -e "s|STORAGE_CLASS_PLACEHOLDER|managed-csi|g" \
+            kubernetes/postgres/deployment.yaml \
+            > /tmp/postgres-statefulset.yaml
+
+
+      - name: Apply PostgreSQL StatefulSet
+        run: |
+          kubectl apply \
+            -f /tmp/postgres-statefulset.yaml
+
+
+      # ==========================================
+      # PostgreSQL service
+      # ==========================================
+
+      - name: Apply PostgreSQL service
+        run: |
+          kubectl apply \
+            -f kubernetes/postgres/service.yaml
+
+
+      # ==========================================
+      # Wait for PostgreSQL
+      # ==========================================
+
+      - name: Wait for PostgreSQL
+        run: |
+          kubectl wait \
+            --for=condition=ready \
+            pod/postgres-0 \
+            -n mlops \
+            --timeout=10m
+
+
+      # ==========================================
+      # MLflow configuration
+      # ==========================================
+
+      - name: Prepare MLflow config
+        run: |
+          sed \
+            -e "s|ARTIFACTS_DESTINATION_PLACEHOLDER|wasbs://mlflow@${MODEL_STORAGE_ACCOUNT}.blob.core.windows.net/mlflow|g" \
+            kubernetes/mlflow/config.yaml \
+            > /tmp/mlflow-config.yaml
+
+
+      - name: Apply MLflow config
+        run: |
+          kubectl apply \
+            -f /tmp/mlflow-config.yaml
+
+
+      # ==========================================
+      # Prepare MLflow Deployment
+      # ==========================================
+
+      - name: Prepare MLflow Deployment
+        run: |
+          sed \
+            -e "s|MLFLOW_IMAGE_PLACEHOLDER|${ACR_LOGIN_SERVER}/mlops-thesis-k8s-mlflow:${MLFLOW_IMAGE_TAG}|g" \
+            kubernetes/mlflow/deployment.yaml \
+            > /tmp/mlflow-deployment.yaml
+
+
+      - name: Apply MLflow Deployment
+        run: |
+          kubectl apply \
+            -f /tmp/mlflow-deployment.yaml
+
+
+      # ==========================================
+      # MLflow service
+      # ==========================================
+
+      - name: Apply MLflow service
+        run: |
+          kubectl apply \
+            -f kubernetes/mlflow/service.yaml
+
+
+      # ==========================================
+      # Wait for MLflow
+      # ==========================================
+
+      - name: Wait for MLflow
+        run: |
+          kubectl wait \
+            --for=condition=available \
+            deployment/mlflow \
+            -n mlops \
+            --timeout=10m
+
+
+      # ==========================================
+      # Final status
+      # ==========================================
+
+      - name: Show platform status
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n mlops -o wide
+
+          echo ""
+          echo "=== Services ==="
+          kubectl get services -n mlops
+
+          echo ""
+          echo "=== PVCs ==="
+          kubectl get pvc -n mlops

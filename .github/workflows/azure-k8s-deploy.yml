@@ -1,0 +1,181 @@
+name: Azure Kubernetes - Deploy Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Model version"
+        required: true
+        default: "v1"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      ARM_SUBSCRIPTION_ID: a71b1a56-760a-4510-9453-9525c3b99c8f
+      ARM_CLIENT_ID: 53c2023d-035b-4459-a043-d5f9b50a032c
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_TENANT_ID: d81a2e37-d18e-42ec-8839-9a2de1586e0c
+
+      MODEL_VERSION: ${{ inputs.model_version }}
+
+    steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # Azure Login
+      # ==========================================
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: >-
+            {
+              "clientId": "${{ env.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ env.ARM_CLIENT_SECRET }}",
+              "tenantId": "${{ env.ARM_TENANT_ID }}",
+              "subscriptionId": "${{ env.ARM_SUBSCRIPTION_ID }}"
+            }
+
+
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ==========================================
+      # Terraform Init
+      # ==========================================
+
+      - name: Terraform Init
+        working-directory: terraform/kubernetes/azure
+        run: |
+          terraform init \
+            -input=false
+
+
+      # ==========================================
+      # Terraform outputs
+      # ==========================================
+
+      - name: Get Terraform outputs
+        working-directory: terraform/kubernetes/azure
+        run: |
+          echo "AKS_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
+          echo "AKS_RESOURCE_GROUP=$(terraform output -raw resource_group_name)" >> "$GITHUB_ENV"
+          echo "ACR_LOGIN_SERVER=$(terraform output -raw acr_login_server)" >> "$GITHUB_ENV"
+
+
+      # ==========================================
+      # Get AKS credentials
+      # ==========================================
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group "${AKS_RESOURCE_GROUP}" \
+            --name "${AKS_CLUSTER_NAME}" \
+            --overwrite-existing
+
+
+      # ==========================================
+      # Check Kubernetes
+      # ==========================================
+
+      - name: Check Kubernetes access
+        run: |
+          kubectl cluster-info
+          kubectl get nodes -o wide
+
+
+      # ==========================================
+      # Check current platform
+      # ==========================================
+
+      - name: Check MLflow
+        run: |
+          kubectl get deployment mlflow \
+            -n mlops
+
+          kubectl get pods \
+            -n mlops \
+            -l app=mlflow
+
+
+      # ==========================================
+      # Prepare inference deployment
+      # ==========================================
+
+      - name: Prepare inference deployment
+        run: |
+          sed \
+            -e "s|IMAGE_PLACEHOLDER|${ACR_LOGIN_SERVER}/mlops-thesis-k8s-inference:${MODEL_VERSION}|g" \
+            -e "s|MODEL_VERSION_PLACEHOLDER|${MODEL_VERSION}|g" \
+            kubernetes/inference/deployment.yaml \
+            > /tmp/inference-deployment.yaml
+
+
+      # ==========================================
+      # Apply inference deployment
+      # ==========================================
+
+      - name: Apply inference deployment
+        run: |
+          kubectl apply \
+            -f /tmp/inference-deployment.yaml
+
+
+      # ==========================================
+      # Apply inference service
+      # ==========================================
+
+      - name: Apply inference service
+        run: |
+          kubectl apply \
+            -f kubernetes/inference/service.yaml
+
+
+      # ==========================================
+      # Wait for inference
+      # ==========================================
+
+      - name: Wait for inference deployment
+        run: |
+          kubectl wait \
+            --for=condition=available \
+            deployment/mlops-inference \
+            -n mlops \
+            --timeout=10m
+
+
+      # ==========================================
+      # Check inference
+      # ==========================================
+
+      - name: Check inference
+        run: |
+          echo "=== Deployments ==="
+          kubectl get deployments \
+            -n mlops
+
+          echo ""
+          echo "=== Pods ==="
+          kubectl get pods \
+            -n mlops \
+            -o wide
+
+          echo ""
+          echo "=== Services ==="
+          kubectl get services \
+            -n mlops
