@@ -103,6 +103,17 @@ jobs:
 
 
       # ==========================================
+      # Check Training ServiceAccount
+      # ==========================================
+
+      - name: Check Training ServiceAccount
+        run: |
+          kubectl get serviceaccount mlops-training \
+            -n mlops \
+            -o yaml
+
+
+      # ==========================================
       # Login to ACR
       # ==========================================
 
@@ -135,60 +146,90 @@ jobs:
 
 
       # ==========================================
-      # Configure training ServiceAccount
-      # ==========================================
-
-      - name: Configure Training Azure Workload Identity
-        run: |
-          kubectl annotate serviceaccount training \
-            -n mlops \
-            azure.workload.identity/client-id="${TRAINING_IDENTITY_CLIENT_ID}" \
-            --overwrite
-
-
-      # ==========================================
       # Prepare training Job
       # ==========================================
 
       - name: Prepare training Job
+        env:
+          ACR_LOGIN_SERVER: ${{ env.ACR_LOGIN_SERVER }}
+          MODEL_VERSION: ${{ env.MODEL_VERSION }}
         run: |
           python -m pip install --quiet pyyaml
 
           python <<'PY'
+          import os
           import yaml
 
           source = "kubernetes/training/job.yaml"
           target = "/tmp/training-job.yaml"
 
+          acr_login_server = os.environ["ACR_LOGIN_SERVER"]
+          model_version = os.environ["MODEL_VERSION"]
+
+          image = (
+              f"{acr_login_server}/"
+              f"mlops-thesis-k8s-train:"
+              f"{model_version}"
+          )
+
           with open(source, "r", encoding="utf-8") as f:
               document = yaml.safe_load(f)
 
-          document["spec"]["template"]["metadata"] = (
-              document["spec"]["template"].get("metadata", {})
-          )
+          pod_template = document["spec"]["template"]
 
-          document["spec"]["template"]["metadata"]["labels"] = (
-              document["spec"]["template"]["metadata"].get("labels", {})
-          )
+          # ------------------------------------------
+          # Azure Workload Identity
+          # ------------------------------------------
 
-          document["spec"]["template"]["metadata"]["labels"][
+          pod_template.setdefault("metadata", {})
+          pod_template["metadata"].setdefault("labels", {})
+
+          pod_template["metadata"]["labels"][
               "azure.workload.identity/use"
           ] = "true"
 
-          container = document["spec"]["template"]["spec"]["containers"][0]
+          # ------------------------------------------
+          # Azure ServiceAccount
+          # ------------------------------------------
 
-          image = (
-              "${ACR_LOGIN_SERVER}/mlops-thesis-k8s-train:"
-              "${MODEL_VERSION}"
-          )
+          pod_template.setdefault("spec", {})
 
-          container["image"] = image
+          pod_template["spec"][
+              "serviceAccountName"
+          ] = "mlops-training"
 
-          env = container.get("env", [])
+          # ------------------------------------------
+          # Training image
+          # ------------------------------------------
+
+          containers = pod_template["spec"]["containers"]
+
+          if not containers:
+              raise RuntimeError(
+                  "Training Job does not contain any containers."
+              )
+
+          containers[0]["image"] = image
+
+          # ------------------------------------------
+          # MODEL_VERSION
+          # ------------------------------------------
+
+          env = containers[0].setdefault("env", [])
+
+          model_version_found = False
 
           for item in env:
               if item.get("name") == "MODEL_VERSION":
-                  item["value"] = "${MODEL_VERSION}"
+                  item["value"] = model_version
+                  model_version_found = True
+                  break
+
+          if not model_version_found:
+              env.append({
+                  "name": "MODEL_VERSION",
+                  "value": model_version,
+              })
 
           with open(target, "w", encoding="utf-8") as f:
               yaml.safe_dump(
@@ -197,6 +238,11 @@ jobs:
                   sort_keys=False,
                   default_flow_style=False,
               )
+
+          print(f"Training image: {image}")
+          print("ServiceAccount: mlops-training")
+          print("Azure Workload Identity enabled: true")
+          print(f"Model version: {model_version}")
           PY
 
 
@@ -215,7 +261,7 @@ jobs:
 
 
       # ==========================================
-      # Check training Pod
+      # Check training status
       # ==========================================
 
       - name: Check training status
@@ -227,6 +273,38 @@ jobs:
           kubectl get pods \
             -n mlops \
             -o wide
+
+
+      # ==========================================
+      # Verify Workload Identity injection
+      # ==========================================
+
+      - name: Verify Training Workload Identity
+        run: |
+          POD_NAME=$(kubectl get pods \
+            -n mlops \
+            -l job-name=mlops-training \
+            -o jsonpath='{.items[0].metadata.name}')
+
+          echo "Training pod: ${POD_NAME}"
+
+          echo ""
+          echo "=== Azure environment ==="
+
+          kubectl exec \
+            -n mlops \
+            "${POD_NAME}" \
+            -- sh -c 'env | grep "^AZURE_" || true'
+
+          echo ""
+          echo "=== ServiceAccount ==="
+
+          kubectl get pod \
+            -n mlops \
+            "${POD_NAME}" \
+            -o jsonpath='{.spec.serviceAccountName}'
+
+          echo ""
 
 
       # ==========================================
