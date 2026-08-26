@@ -73,18 +73,9 @@ model = ml_client.models.get(
 )
 
 print("Using model:")
-
-print(
-    f"name={model.name}"
-)
-
-print(
-    f"version={model.version}"
-)
-
-print(
-    f"type={model.type}"
-)
+print(f"name={model.name}")
+print(f"version={model.version}")
+print(f"type={model.type}")
 
 
 # =========================================================
@@ -115,41 +106,7 @@ print(
 
 
 # =========================================================
-# Delete existing deployment
-# =========================================================
-
-print(
-    f"Checking existing deployment: {DEPLOYMENT_NAME}"
-)
-
-try:
-    ml_client.online_deployments.begin_delete(
-        name=DEPLOYMENT_NAME,
-        endpoint_name=ENDPOINT_NAME,
-    ).result()
-
-    print(
-        f"Existing deployment deleted: "
-        f"{DEPLOYMENT_NAME}"
-    )
-
-except Exception as exc:
-    message = str(exc).lower()
-
-    if (
-        "not found" in message
-        or "resourcenotfound" in message
-    ):
-        print(
-            f"Deployment does not exist: "
-            f"{DEPLOYMENT_NAME}"
-        )
-    else:
-        raise
-
-
-# =========================================================
-# Create deployment
+# Create or update deployment
 # =========================================================
 
 deployment = ManagedOnlineDeployment(
@@ -161,7 +118,8 @@ deployment = ManagedOnlineDeployment(
 )
 
 print(
-    f"Creating deployment: {DEPLOYMENT_NAME}"
+    f"Creating/updating deployment: "
+    f"{DEPLOYMENT_NAME}"
 )
 
 deployment = (
@@ -173,13 +131,19 @@ deployment = (
 )
 
 print(
-    f"Deployment ready: {deployment.name}"
+    f"Deployment ready: "
+    f"{deployment.name}"
 )
 
 
 # =========================================================
 # Route traffic
 # =========================================================
+
+print(
+    f"Routing 100% traffic to: "
+    f"{DEPLOYMENT_NAME}"
+)
 
 endpoint = ml_client.online_endpoints.get(
     ENDPOINT_NAME
@@ -211,11 +175,15 @@ print(
 )
 
 print(
-    f"Deployment name: {DEPLOYMENT_NAME}"
+    f"Deployment name: {deployment.name}"
 )
 
 print(
     f"Model version: {MODEL_VERSION}"
+)
+
+print(
+    f"Instance type: {INSTANCE_TYPE}"
 )
 
 print(
