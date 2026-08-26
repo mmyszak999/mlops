@@ -66,7 +66,17 @@ jobs:
       - name: Get Terraform outputs
         working-directory: terraform/kubernetes/aws
         run: |
-          echo "MODEL_BUCKET=$(terraform output -raw model_bucket_name)" >> "$GITHUB_ENV"
+          MODEL_BUCKET="$(terraform output -raw model_bucket_name)"
+
+          if [[ -z "${MODEL_BUCKET}" ]]; then
+            echo "ERROR: Terraform returned an empty model bucket name."
+            exit 1
+          fi
+
+          echo "MODEL_BUCKET=${MODEL_BUCKET}" >> "$GITHUB_ENV"
+
+          echo "Resolved model bucket:"
+          echo "${MODEL_BUCKET}"
 
 
       # ==========================================
@@ -297,10 +307,18 @@ jobs:
 
       - name: Prepare MLflow config
         run: |
-          sed \
-            -e "s|ARTIFACTS_DESTINATION_PLACEHOLDER|s3://${MODEL_BUCKET}/mlflow|g" \
-            kubernetes/mlflow/config.yaml \
-            > /tmp/mlflow-config.yaml
+          cat > /tmp/mlflow-config.yaml <<EOF
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: mlflow-config
+            namespace: mlops
+          data:
+            ARTIFACTS_DESTINATION: s3://${MODEL_BUCKET}/mlflow
+          EOF
+
+          echo "=== Generated MLflow configuration ==="
+          cat /tmp/mlflow-config.yaml
 
 
       # ==========================================
@@ -311,6 +329,17 @@ jobs:
         run: |
           kubectl apply \
             -f /tmp/mlflow-config.yaml
+
+
+      # ==========================================
+      # Verify MLflow config
+      # ==========================================
+
+      - name: Verify MLflow config
+        run: |
+          kubectl get configmap mlflow-config \
+            -n mlops \
+            -o yaml
 
 
       # ==========================================
@@ -338,6 +367,36 @@ jobs:
 
 
       # ==========================================
+      # Restart MLflow
+      # ==========================================
+
+      - name: Restart MLflow
+        run: |
+          kubectl rollout restart \
+            deployment/mlflow \
+            -n mlops
+
+          kubectl rollout status \
+            deployment/mlflow \
+            -n mlops \
+            --timeout=10m
+
+
+      # ==========================================
+      # Verify MLflow artifact destination
+      # ==========================================
+
+      - name: Verify MLflow artifact destination
+        run: |
+          echo "=== MLflow artifact destination ==="
+
+          kubectl exec \
+            -n mlops \
+            deployment/mlflow \
+            -- sh -c 'env | grep ARTIFACTS_DESTINATION'
+
+
+      # ==========================================
       # Apply MLflow Service
       # ==========================================
 
@@ -345,18 +404,6 @@ jobs:
         run: |
           kubectl apply \
             -f kubernetes/mlflow/service.yaml
-
-
-      # ==========================================
-      # Wait for MLflow
-      # ==========================================
-
-      - name: Wait for MLflow
-        run: |
-          kubectl rollout status \
-            deployment/mlflow \
-            -n mlops \
-            --timeout=10m
 
 
       # ==========================================
