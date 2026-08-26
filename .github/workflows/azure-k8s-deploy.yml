@@ -117,15 +117,14 @@ jobs:
 
 
       # ==========================================
-      # Configure inference ServiceAccount
+      # Check Inference ServiceAccount
       # ==========================================
 
-      - name: Configure Inference Azure Workload Identity
+      - name: Check Inference ServiceAccount
         run: |
-          kubectl annotate serviceaccount inference \
+          kubectl get serviceaccount mlops-inference \
             -n mlops \
-            azure.workload.identity/client-id="${INFERENCE_IDENTITY_CLIENT_ID}" \
-            --overwrite
+            -o yaml
 
 
       # ==========================================
@@ -133,36 +132,66 @@ jobs:
       # ==========================================
 
       - name: Prepare inference deployment
+        env:
+          ACR_LOGIN_SERVER: ${{ env.ACR_LOGIN_SERVER }}
+          MODEL_VERSION: ${{ env.MODEL_VERSION }}
         run: |
           python -m pip install --quiet pyyaml
 
           python <<'PY'
+          import os
           import yaml
 
           source = "kubernetes/inference/deployment.yaml"
           target = "/tmp/inference-deployment.yaml"
 
+          acr_login_server = os.environ["ACR_LOGIN_SERVER"]
+          model_version = os.environ["MODEL_VERSION"]
+
+          image = (
+              f"{acr_login_server}/"
+              f"mlops-thesis-k8s-inference:"
+              f"{model_version}"
+          )
+
           with open(source, "r", encoding="utf-8") as f:
               document = yaml.safe_load(f)
 
-          document["spec"]["template"]["metadata"] = (
-              document["spec"]["template"].get("metadata", {})
-          )
+          pod_template = document["spec"]["template"]
 
-          document["spec"]["template"]["metadata"]["labels"] = (
-              document["spec"]["template"]["metadata"].get("labels", {})
-          )
+          # ------------------------------------------
+          # Azure Workload Identity
+          # ------------------------------------------
 
-          document["spec"]["template"]["metadata"]["labels"][
+          pod_template.setdefault("metadata", {})
+          pod_template["metadata"].setdefault("labels", {})
+
+          pod_template["metadata"]["labels"][
               "azure.workload.identity/use"
           ] = "true"
 
-          container = document["spec"]["template"]["spec"]["containers"][0]
+          # ------------------------------------------
+          # Azure ServiceAccount
+          # ------------------------------------------
 
-          container["image"] = (
-              "${ACR_LOGIN_SERVER}/mlops-thesis-k8s-inference:"
-              "${MODEL_VERSION}"
-          )
+          pod_template.setdefault("spec", {})
+
+          pod_template["spec"][
+              "serviceAccountName"
+          ] = "mlops-inference"
+
+          # ------------------------------------------
+          # Inference image
+          # ------------------------------------------
+
+          containers = pod_template["spec"]["containers"]
+
+          if not containers:
+              raise RuntimeError(
+                  "Inference Deployment does not contain any containers."
+              )
+
+          containers[0]["image"] = image
 
           with open(target, "w", encoding="utf-8") as f:
               yaml.safe_dump(
@@ -171,6 +200,11 @@ jobs:
                   sort_keys=False,
                   default_flow_style=False,
               )
+
+          print(f"Inference image: {image}")
+          print("ServiceAccount: mlops-inference")
+          print("Azure Workload Identity enabled: true")
+          print(f"Model version: {model_version}")
           PY
 
 
@@ -232,3 +266,19 @@ jobs:
 
           kubectl get services \
             -n mlops
+
+          echo ""
+
+          echo "=== Inference Workload Identity ==="
+
+          kubectl get deployment mlops-inference \
+            -n mlops \
+            -o jsonpath='{.spec.template.spec.serviceAccountName}'
+
+          echo ""
+
+          kubectl get deployment mlops-inference \
+            -n mlops \
+            -o jsonpath='{.spec.template.metadata.labels.azure\.workload\.identity/use}'
+
+          echo ""
