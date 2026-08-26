@@ -14,8 +14,6 @@ jobs:
       MLFLOW_ECR_REPOSITORY: mlops-thesis-k8s-mlflow
       MLFLOW_IMAGE_TAG: v1
 
-      MODEL_BUCKET: mlops-thesis-k8s-20260820062427988900000001
-
       STORAGE_CLASS: gp3
 
       POSTGRES_PASSWORD: password
@@ -43,12 +41,69 @@ jobs:
 
 
       # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ==========================================
+      # Terraform Init
+      # ==========================================
+
+      - name: Terraform Init
+        working-directory: terraform/kubernetes/aws
+        run: |
+          terraform init \
+            -input=false
+
+
+      # ==========================================
+      # Get Terraform outputs
+      # ==========================================
+
+      - name: Get Terraform outputs
+        working-directory: terraform/kubernetes/aws
+        run: |
+          echo "MODEL_BUCKET=$(terraform output -raw model_bucket_name)" >> "$GITHUB_ENV"
+
+
+      # ==========================================
+      # Refresh EKS kubeconfig
+      # ==========================================
+
+      - name: Refresh EKS kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${AWS_REGION}" \
+            --name "${EKS_CLUSTER_NAME}" \
+            --alias "${EKS_CLUSTER_NAME}"
+
+          kubectl config use-context "${EKS_CLUSTER_NAME}"
+
+
+      # ==========================================
       # AWS identity
       # ==========================================
 
       - name: Check AWS identity
         run: |
           aws sts get-caller-identity
+
+
+      # ==========================================
+      # Check resolved configuration
+      # ==========================================
+
+      - name: Show resolved configuration
+        run: |
+          echo "AWS Region: ${AWS_REGION}"
+          echo "EKS Cluster: ${EKS_CLUSTER_NAME}"
+          echo "MLflow ECR Repository: ${MLFLOW_ECR_REPOSITORY}"
+          echo "MLflow Image Tag: ${MLFLOW_IMAGE_TAG}"
+          echo "Model Bucket: ${MODEL_BUCKET}"
+          echo "Storage Class: ${STORAGE_CLASS}"
 
 
       # ==========================================
@@ -87,17 +142,6 @@ jobs:
 
 
       # ==========================================
-      # Configure kubectl
-      # ==========================================
-
-      - name: Update kubeconfig
-        run: |
-          aws eks update-kubeconfig \
-            --region "${AWS_REGION}" \
-            --name "${EKS_CLUSTER_NAME}"
-
-
-      # ==========================================
       # Check Kubernetes access
       # ==========================================
 
@@ -128,10 +172,10 @@ jobs:
 
 
       # ==========================================
-      # PostgreSQL StorageClass
+      # AWS StorageClass
       # ==========================================
 
-      - name: Apply PostgreSQL StorageClass
+      - name: Apply AWS StorageClass
         run: |
           kubectl apply \
             -f kubernetes/aws-storage-class.yaml
@@ -194,10 +238,14 @@ jobs:
             -f /tmp/postgres-statefulset.yaml
 
           echo "=== PostgreSQL StatefulSets ==="
-          kubectl get statefulset -n mlops
+
+          kubectl get statefulset \
+            -n mlops
 
           echo "=== PostgreSQL PVCs ==="
-          kubectl get pvc -n mlops
+
+          kubectl get pvc \
+            -n mlops
 
 
       # ==========================================
@@ -229,13 +277,16 @@ jobs:
       - name: Check PostgreSQL
         run: |
           echo "=== PostgreSQL Pods ==="
+
           kubectl get pods \
             -n mlops \
             -l app=postgres \
             -o wide
 
           echo ""
+
           echo "=== PostgreSQL PVCs ==="
+
           kubectl get pvc \
             -n mlops
 
@@ -315,20 +366,27 @@ jobs:
       - name: Show platform status
         run: |
           echo "=== Pods ==="
+
           kubectl get pods \
             -n mlops \
             -o wide
 
           echo ""
+
           echo "=== Services ==="
+
           kubectl get services \
             -n mlops
 
           echo ""
+
           echo "=== PVCs ==="
+
           kubectl get pvc \
             -n mlops
 
           echo ""
+
           echo "=== StorageClasses ==="
+
           kubectl get storageclass
