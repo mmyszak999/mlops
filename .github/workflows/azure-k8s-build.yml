@@ -77,8 +77,6 @@ jobs:
           echo "ACR_NAME=$(terraform output -raw acr_name)" >> "$GITHUB_ENV"
           echo "ACR_LOGIN_SERVER=$(terraform output -raw acr_login_server)" >> "$GITHUB_ENV"
 
-          echo "TRAINING_IDENTITY_CLIENT_ID=$(terraform output -raw training_identity_client_id)" >> "$GITHUB_ENV"
-
 
       # ==========================================
       # Get AKS credentials
@@ -273,60 +271,6 @@ jobs:
           kubectl get pods \
             -n mlops \
             -o wide
-
-
-      # ==========================================
-      # Verify Workload Identity injection
-      # ==========================================
-
-      - name: Verify Training Workload Identity
-        run: |
-          POD_NAME=$(kubectl get pods \
-            -n mlops \
-            -l job-name=mlops-training \
-            -o jsonpath='{.items[0].metadata.name}')
-
-          echo "Training pod: ${POD_NAME}"
-
-          echo ""
-          echo "=== Pod ServiceAccount ==="
-
-          kubectl get pod \
-            -n mlops \
-            "${POD_NAME}" \
-            -o jsonpath='{.spec.serviceAccountName}'
-
-          echo ""
-
-          echo ""
-          echo "=== Azure Workload Identity label ==="
-
-          kubectl get pod \
-            -n mlops \
-            "${POD_NAME}" \
-            -o jsonpath='{.metadata.labels.azure\.workload\.identity/use}'
-
-          echo ""
-
-          echo ""
-          echo "=== Azure injected environment variables ==="
-
-          kubectl get pod \
-            -n mlops \
-            "${POD_NAME}" \
-            -o jsonpath='{.spec.containers[0].env}'
-
-          echo ""
-
-          echo ""
-          echo "=== Azure identity token volume ==="
-
-          kubectl get pod \
-            -n mlops \
-            "${POD_NAME}" \
-            -o jsonpath='{.spec.volumes[?(@.name=="azure-identity-token")].name}'
-
-          echo ""
 
 
       # ==========================================
