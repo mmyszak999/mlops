@@ -134,7 +134,7 @@ jobs:
       - name: Apply PostgreSQL StorageClass
         run: |
           kubectl apply \
-            -f kubernetes/postgres/storage-class.yaml
+            -f kubernetes/aws-storage-class.yaml
 
 
       # ==========================================
