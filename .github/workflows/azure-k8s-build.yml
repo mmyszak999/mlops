@@ -77,6 +77,8 @@ jobs:
           echo "ACR_NAME=$(terraform output -raw acr_name)" >> "$GITHUB_ENV"
           echo "ACR_LOGIN_SERVER=$(terraform output -raw acr_login_server)" >> "$GITHUB_ENV"
 
+          echo "TRAINING_IDENTITY_CLIENT_ID=$(terraform output -raw training_identity_client_id)" >> "$GITHUB_ENV"
+
 
       # ==========================================
       # Get AKS credentials
@@ -133,16 +135,69 @@ jobs:
 
 
       # ==========================================
+      # Configure training ServiceAccount
+      # ==========================================
+
+      - name: Configure Training Azure Workload Identity
+        run: |
+          kubectl annotate serviceaccount training \
+            -n mlops \
+            azure.workload.identity/client-id="${TRAINING_IDENTITY_CLIENT_ID}" \
+            --overwrite
+
+
+      # ==========================================
       # Prepare training Job
       # ==========================================
 
       - name: Prepare training Job
         run: |
-          sed \
-            -e "s|IMAGE_PLACEHOLDER|${ACR_LOGIN_SERVER}/mlops-thesis-k8s-train:${MODEL_VERSION}|g" \
-            -e "s|MODEL_VERSION_PLACEHOLDER|${MODEL_VERSION}|g" \
-            kubernetes/training/job.yaml \
-            > /tmp/training-job.yaml
+          python -m pip install --quiet pyyaml
+
+          python <<'PY'
+          import yaml
+
+          source = "kubernetes/training/job.yaml"
+          target = "/tmp/training-job.yaml"
+
+          with open(source, "r", encoding="utf-8") as f:
+              document = yaml.safe_load(f)
+
+          document["spec"]["template"]["metadata"] = (
+              document["spec"]["template"].get("metadata", {})
+          )
+
+          document["spec"]["template"]["metadata"]["labels"] = (
+              document["spec"]["template"]["metadata"].get("labels", {})
+          )
+
+          document["spec"]["template"]["metadata"]["labels"][
+              "azure.workload.identity/use"
+          ] = "true"
+
+          container = document["spec"]["template"]["spec"]["containers"][0]
+
+          image = (
+              "${ACR_LOGIN_SERVER}/mlops-thesis-k8s-train:"
+              "${MODEL_VERSION}"
+          )
+
+          container["image"] = image
+
+          env = container.get("env", [])
+
+          for item in env:
+              if item.get("name") == "MODEL_VERSION":
+                  item["value"] = "${MODEL_VERSION}"
+
+          with open(target, "w", encoding="utf-8") as f:
+              yaml.safe_dump(
+                  document,
+                  f,
+                  sort_keys=False,
+                  default_flow_style=False,
+              )
+          PY
 
 
       # ==========================================
@@ -160,14 +215,18 @@ jobs:
 
 
       # ==========================================
-      # Status
+      # Check training Pod
       # ==========================================
 
       - name: Check training status
         run: |
           kubectl get jobs -n mlops
+
           echo ""
-          kubectl get pods -n mlops -o wide
+
+          kubectl get pods \
+            -n mlops \
+            -o wide
 
 
       # ==========================================

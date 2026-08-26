@@ -74,7 +74,10 @@ jobs:
         run: |
           echo "AKS_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> "$GITHUB_ENV"
           echo "AKS_RESOURCE_GROUP=$(terraform output -raw resource_group_name)" >> "$GITHUB_ENV"
+          echo "ACR_NAME=$(terraform output -raw acr_name)" >> "$GITHUB_ENV"
           echo "ACR_LOGIN_SERVER=$(terraform output -raw acr_login_server)" >> "$GITHUB_ENV"
+
+          echo "INFERENCE_IDENTITY_CLIENT_ID=$(terraform output -raw inference_identity_client_id)" >> "$GITHUB_ENV"
 
 
       # ==========================================
@@ -114,20 +117,65 @@ jobs:
 
 
       # ==========================================
-      # Prepare inference deployment
+      # Configure inference ServiceAccount
+      # ==========================================
+
+      - name: Configure Inference Azure Workload Identity
+        run: |
+          kubectl annotate serviceaccount inference \
+            -n mlops \
+            azure.workload.identity/client-id="${INFERENCE_IDENTITY_CLIENT_ID}" \
+            --overwrite
+
+
+      # ==========================================
+      # Prepare inference Deployment
       # ==========================================
 
       - name: Prepare inference deployment
         run: |
-          sed \
-            -e "s|IMAGE_PLACEHOLDER|${ACR_LOGIN_SERVER}/mlops-thesis-k8s-inference:${MODEL_VERSION}|g" \
-            -e "s|MODEL_VERSION_PLACEHOLDER|${MODEL_VERSION}|g" \
-            kubernetes/inference/deployment.yaml \
-            > /tmp/inference-deployment.yaml
+          python -m pip install --quiet pyyaml
+
+          python <<'PY'
+          import yaml
+
+          source = "kubernetes/inference/deployment.yaml"
+          target = "/tmp/inference-deployment.yaml"
+
+          with open(source, "r", encoding="utf-8") as f:
+              document = yaml.safe_load(f)
+
+          document["spec"]["template"]["metadata"] = (
+              document["spec"]["template"].get("metadata", {})
+          )
+
+          document["spec"]["template"]["metadata"]["labels"] = (
+              document["spec"]["template"]["metadata"].get("labels", {})
+          )
+
+          document["spec"]["template"]["metadata"]["labels"][
+              "azure.workload.identity/use"
+          ] = "true"
+
+          container = document["spec"]["template"]["spec"]["containers"][0]
+
+          container["image"] = (
+              "${ACR_LOGIN_SERVER}/mlops-thesis-k8s-inference:"
+              "${MODEL_VERSION}"
+          )
+
+          with open(target, "w", encoding="utf-8") as f:
+              yaml.safe_dump(
+                  document,
+                  f,
+                  sort_keys=False,
+                  default_flow_style=False,
+              )
+          PY
 
 
       # ==========================================
-      # Apply inference deployment
+      # Apply inference Deployment
       # ==========================================
 
       - name: Apply inference deployment
@@ -137,7 +185,7 @@ jobs:
 
 
       # ==========================================
-      # Apply inference service
+      # Apply inference Service
       # ==========================================
 
       - name: Apply inference service
@@ -166,16 +214,21 @@ jobs:
       - name: Check inference
         run: |
           echo "=== Deployments ==="
+
           kubectl get deployments \
             -n mlops
 
           echo ""
+
           echo "=== Pods ==="
+
           kubectl get pods \
             -n mlops \
             -o wide
 
           echo ""
+
           echo "=== Services ==="
+
           kubectl get services \
             -n mlops
