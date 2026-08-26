@@ -284,6 +284,32 @@ jobs:
         run: |
           kubectl apply \
             -f /tmp/mlflow-deployment.yaml
+      
+      - name: Configure MLflow Azure Workload Identity
+        run: |
+          kubectl annotate serviceaccount mlflow \
+            -n mlops \
+            azure.workload.identity/client-id="${MLFLOW_IDENTITY_CLIENT_ID}" \
+            --overwrite
+
+          kubectl patch deployment mlflow \
+            -n mlops \
+            --type='strategic' \
+            -p='{
+              "spec": {
+                "template": {
+                  "metadata": {
+                    "labels": {
+                      "azure.workload.identity/use": "true"
+                    }
+                  }
+                }
+              }
+            }'
+
+          kubectl rollout status deployment/mlflow \
+            -n mlops \
+            --timeout=5m
 
 
       # ==========================================
