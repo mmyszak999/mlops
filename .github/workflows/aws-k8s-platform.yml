@@ -337,9 +337,23 @@ jobs:
 
       - name: Verify MLflow config
         run: |
-          kubectl get configmap mlflow-config \
+          echo "=== MLflow artifact destination ==="
+
+          ACTUAL="$(kubectl get configmap mlflow-config \
             -n mlops \
-            -o yaml
+            -o jsonpath='{.data.ARTIFACTS_DESTINATION}')"
+
+          EXPECTED="s3://${MODEL_BUCKET}/mlflow"
+
+          echo "Expected: ${EXPECTED}"
+          echo "Actual:   ${ACTUAL}"
+
+          if [[ "${ACTUAL}" != "${EXPECTED}" ]]; then
+            echo "ERROR: MLflow artifact destination is incorrect."
+            exit 1
+          fi
+
+          echo "MLflow artifact destination is correct."
 
 
       # ==========================================
@@ -380,20 +394,6 @@ jobs:
             deployment/mlflow \
             -n mlops \
             --timeout=10m
-
-
-      # ==========================================
-      # Verify MLflow artifact destination
-      # ==========================================
-
-      - name: Verify MLflow artifact destination
-        run: |
-          echo "=== MLflow artifact destination ==="
-
-          kubectl exec \
-            -n mlops \
-            deployment/mlflow \
-            -- sh -c 'env | grep ARTIFACTS_DESTINATION'
 
 
       # ==========================================
