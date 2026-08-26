@@ -3,10 +3,15 @@ name: Azure Kubernetes - Deploy Model
 on:
   workflow_dispatch:
     inputs:
-      model_version:
-        description: "Model version"
+      image_version:
+        description: "Inference Docker image version"
         required: true
-        default: "v1"
+        default: "v3"
+
+      model_registry_version:
+        description: "MLflow model registry version"
+        required: true
+        default: "2"
 
 jobs:
   deploy:
@@ -18,7 +23,8 @@ jobs:
       ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       ARM_TENANT_ID: d81a2e37-d18e-42ec-8839-9a2de1586e0c
 
-      MODEL_VERSION: ${{ inputs.model_version }}
+      IMAGE_VERSION: ${{ inputs.image_version }}
+      MODEL_REGISTRY_VERSION: ${{ inputs.model_registry_version }}
 
     steps:
 
@@ -77,8 +83,6 @@ jobs:
           echo "ACR_NAME=$(terraform output -raw acr_name)" >> "$GITHUB_ENV"
           echo "ACR_LOGIN_SERVER=$(terraform output -raw acr_login_server)" >> "$GITHUB_ENV"
 
-          echo "INFERENCE_IDENTITY_CLIENT_ID=$(terraform output -raw inference_identity_client_id)" >> "$GITHUB_ENV"
-
 
       # ==========================================
       # Get AKS credentials
@@ -128,13 +132,47 @@ jobs:
 
 
       # ==========================================
+      # Login to ACR
+      # ==========================================
+
+      - name: Login to Azure Container Registry
+        run: |
+          az acr login \
+            --name "${ACR_NAME}"
+
+
+      # ==========================================
+      # Build inference image
+      # ==========================================
+
+      - name: Build inference image
+        run: |
+          docker build \
+            -f docker/inference/Dockerfile \
+            -t "${ACR_LOGIN_SERVER}/mlops-thesis-k8s-inference:${IMAGE_VERSION}" \
+            .
+
+
+      # ==========================================
+      # Push inference image
+      # ==========================================
+
+      - name: Push inference image
+        run: |
+          docker push \
+            "${ACR_LOGIN_SERVER}/mlops-thesis-k8s-inference:${IMAGE_VERSION}"
+
+
+      # ==========================================
       # Prepare inference Deployment
       # ==========================================
 
       - name: Prepare inference deployment
         env:
           ACR_LOGIN_SERVER: ${{ env.ACR_LOGIN_SERVER }}
-          MODEL_VERSION: ${{ env.MODEL_VERSION }}
+          IMAGE_VERSION: ${{ env.IMAGE_VERSION }}
+          MODEL_REGISTRY_VERSION: ${{ env.MODEL_REGISTRY_VERSION }}
+
         run: |
           python -m pip install --quiet pyyaml
 
@@ -146,12 +184,13 @@ jobs:
           target = "/tmp/inference-deployment.yaml"
 
           acr_login_server = os.environ["ACR_LOGIN_SERVER"]
-          model_version = os.environ["MODEL_VERSION"]
+          image_version = os.environ["IMAGE_VERSION"]
+          model_registry_version = os.environ["MODEL_REGISTRY_VERSION"]
 
           image = (
               f"{acr_login_server}/"
               f"mlops-thesis-k8s-inference:"
-              f"{model_version}"
+              f"{image_version}"
           )
 
           with open(source, "r", encoding="utf-8") as f:
@@ -181,7 +220,7 @@ jobs:
           ] = "mlops-inference"
 
           # ------------------------------------------
-          # Inference image
+          # Container
           # ------------------------------------------
 
           containers = pod_template["spec"]["containers"]
@@ -191,7 +230,33 @@ jobs:
                   "Inference Deployment does not contain any containers."
               )
 
-          containers[0]["image"] = image
+          container = containers[0]
+
+          container["image"] = image
+
+          # ------------------------------------------
+          # MLflow model registry version
+          # ------------------------------------------
+
+          env = container.setdefault("env", [])
+
+          registry_version_found = False
+
+          for item in env:
+              if item.get("name") == "MODEL_REGISTRY_VERSION":
+                  item["value"] = model_registry_version
+                  registry_version_found = True
+                  break
+
+          if not registry_version_found:
+              env.append({
+                  "name": "MODEL_REGISTRY_VERSION",
+                  "value": model_registry_version,
+              })
+
+          # ------------------------------------------
+          # Save manifest
+          # ------------------------------------------
 
           with open(target, "w", encoding="utf-8") as f:
               yaml.safe_dump(
@@ -204,7 +269,10 @@ jobs:
           print(f"Inference image: {image}")
           print("ServiceAccount: mlops-inference")
           print("Azure Workload Identity enabled: true")
-          print(f"Model version: {model_version}")
+          print(
+              f"MLflow model registry version: "
+              f"{model_registry_version}"
+          )
           PY
 
 
@@ -234,8 +302,7 @@ jobs:
 
       - name: Wait for inference deployment
         run: |
-          kubectl wait \
-            --for=condition=available \
+          kubectl rollout status \
             deployment/mlops-inference \
             -n mlops \
             --timeout=10m
@@ -269,7 +336,7 @@ jobs:
 
           echo ""
 
-          echo "=== Inference Workload Identity ==="
+          echo "=== Inference configuration ==="
 
           kubectl get deployment mlops-inference \
             -n mlops \
