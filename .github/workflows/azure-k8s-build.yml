@@ -289,20 +289,42 @@ jobs:
           echo "Training pod: ${POD_NAME}"
 
           echo ""
-          echo "=== Azure environment ==="
-
-          kubectl exec \
-            -n mlops \
-            "${POD_NAME}" \
-            -- sh -c 'env | grep "^AZURE_" || true'
-
-          echo ""
-          echo "=== ServiceAccount ==="
+          echo "=== Pod ServiceAccount ==="
 
           kubectl get pod \
             -n mlops \
             "${POD_NAME}" \
             -o jsonpath='{.spec.serviceAccountName}'
+
+          echo ""
+
+          echo ""
+          echo "=== Azure Workload Identity label ==="
+
+          kubectl get pod \
+            -n mlops \
+            "${POD_NAME}" \
+            -o jsonpath='{.metadata.labels.azure\.workload\.identity/use}'
+
+          echo ""
+
+          echo ""
+          echo "=== Azure injected environment variables ==="
+
+          kubectl get pod \
+            -n mlops \
+            "${POD_NAME}" \
+            -o jsonpath='{.spec.containers[0].env}'
+
+          echo ""
+
+          echo ""
+          echo "=== Azure identity token volume ==="
+
+          kubectl get pod \
+            -n mlops \
+            "${POD_NAME}" \
+            -o jsonpath='{.spec.volumes[?(@.name=="azure-identity-token")].name}'
 
           echo ""
 
