@@ -74,7 +74,7 @@ jobs:
       - name: Get Terraform outputs
         working-directory: terraform/aws
         run: |
-          MODEL_BUCKET="$(terraform output -raw model_bucket_name)"
+          MODEL_BUCKET="$(terraform output -raw bucket_name)"
 
           if [[ -z "${MODEL_BUCKET}" ]]; then
             echo "ERROR: Terraform returned an empty model bucket."
