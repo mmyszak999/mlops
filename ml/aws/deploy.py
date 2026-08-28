@@ -21,9 +21,10 @@ MODEL_VERSION = os.environ[
     "MODEL_VERSION"
 ]
 
-ENDPOINT_NAME = os.environ[
-    "ENDPOINT_NAME"
-]
+ENDPOINT_NAME = os.getenv(
+    "ENDPOINT_NAME",
+    "mlops-thesis-endpoint",
+)
 
 INSTANCE_TYPE = os.environ[
     "INSTANCE_TYPE"

@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
 
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 
 # =========================================================
-# Configuration
+# Paths
 # =========================================================
 
-TERRAFORM_DIR = Path("terraform/azure")
+# cleanup.py is expected to be located in:
+# ml/azure/cleanup.py
+#
+# Repository root:
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+TERRAFORM_DIR = REPO_ROOT / "terraform" / "azure"
+
+
+# =========================================================
+# Azure configuration
+# =========================================================
 
 AZURE_RESOURCE_GROUP = "mlops-thesis-azure"
 AZURE_ML_WORKSPACE = "mlops-thesis-aml"
@@ -22,14 +35,52 @@ MODEL_NAME = "titanic-random-forest"
 # Helpers
 # =========================================================
 
+def resolve_command(command: str) -> str:
+    """
+    Resolve a command in a cross-platform way.
+
+    On Windows Azure CLI is commonly exposed as az.cmd.
+    """
+
+    if os.name == "nt":
+        candidates = [
+            f"{command}.cmd",
+            f"{command}.exe",
+            command,
+        ]
+    else:
+        candidates = [command]
+
+    for candidate in candidates:
+        path = shutil.which(candidate)
+
+        if path:
+            return path
+
+    raise FileNotFoundError(
+        f"Command '{command}' was not found in PATH."
+    )
+
+
 def run_command(
     command: list[str],
     *,
     cwd: Path | None = None,
     capture_output: bool = False,
 ) -> subprocess.CompletedProcess[str]:
+
+    if not command:
+        raise ValueError(
+            "Command cannot be empty."
+        )
+
+    resolved_command = [
+        resolve_command(command[0]),
+        *command[1:],
+    ]
+
     return subprocess.run(
-        command,
+        resolved_command,
         cwd=cwd,
         check=False,
         text=True,
@@ -39,14 +90,10 @@ def run_command(
 
 def command_exists(command: str) -> bool:
     try:
-        result = run_command(
-            ["bash", "-c", f"command -v {command}"],
-            capture_output=True,
-        )
+        resolve_command(command)
+        return True
 
-        return result.returncode == 0
-
-    except Exception:
+    except FileNotFoundError:
         return False
 
 
@@ -63,6 +110,7 @@ def terraform_available() -> bool:
 # =========================================================
 
 def delete_endpoint() -> None:
+
     print()
     print("Checking Azure ML endpoint...")
 
@@ -87,13 +135,16 @@ def delete_endpoint() -> None:
     )
 
     if result.returncode != 0:
+
         print(
             f"Endpoint does not exist: {ENDPOINT_NAME}"
         )
+
         return
 
     print(
-        f"Deleting Azure ML endpoint: {ENDPOINT_NAME}"
+        f"Deleting Azure ML endpoint: "
+        f"{ENDPOINT_NAME}"
     )
 
     result = run_command(
@@ -113,6 +164,7 @@ def delete_endpoint() -> None:
     )
 
     if result.returncode != 0:
+
         raise RuntimeError(
             "Failed to delete Azure ML endpoint."
         )
@@ -127,9 +179,11 @@ def delete_endpoint() -> None:
 # =========================================================
 
 def list_model_versions() -> list[str]:
+
     print()
     print(
-        f"Checking registered model: {MODEL_NAME}"
+        f"Checking registered model: "
+        f"{MODEL_NAME}"
     )
 
     result = run_command(
@@ -165,13 +219,16 @@ def list_model_versions() -> list[str]:
 
 
 def delete_model_versions() -> None:
+
     versions = list_model_versions()
 
     if not versions:
+
         print(
             f"No registered versions found for: "
             f"{MODEL_NAME}"
         )
+
         return
 
     print()
@@ -187,6 +244,7 @@ def delete_model_versions() -> None:
     print("Deleting registered model versions...")
 
     for version in versions:
+
         print(
             f"Deleting model "
             f"{MODEL_NAME}:{version}"
@@ -211,12 +269,15 @@ def delete_model_versions() -> None:
         )
 
         if result.returncode != 0:
+
             raise RuntimeError(
                 f"Failed to delete model version "
                 f"{version}."
             )
 
-    print("Model versions deleted.")
+    print(
+        "Model versions deleted."
+    )
 
 
 # =========================================================
@@ -224,11 +285,13 @@ def delete_model_versions() -> None:
 # =========================================================
 
 def terraform_destroy() -> None:
+
     print()
     print("Running Terraform destroy...")
     print()
 
     if not TERRAFORM_DIR.exists():
+
         raise RuntimeError(
             f"Terraform directory does not exist: "
             f"{TERRAFORM_DIR}"
@@ -244,12 +307,15 @@ def terraform_destroy() -> None:
     )
 
     if result.returncode != 0:
+
         raise RuntimeError(
             "Terraform destroy failed."
         )
 
     print()
-    print("Terraform destroy completed.")
+    print(
+        "Terraform destroy completed."
+    )
 
 
 # =========================================================
@@ -257,6 +323,7 @@ def terraform_destroy() -> None:
 # =========================================================
 
 def main() -> int:
+
     print("=" * 50)
     print(" Azure Native cleanup")
     print("=" * 50)
@@ -284,8 +351,10 @@ def main() -> int:
     ).strip()
 
     if confirmation != "DESTROY":
+
         print()
         print("Cleanup cancelled.")
+
         return 0
 
     print()
@@ -295,33 +364,68 @@ def main() -> int:
     # -----------------------------------------------------
 
     if not azure_cli_available():
+
         print(
-            "ERROR: Azure CLI 'az' was not found."
+            "ERROR: Azure CLI 'az' was not found "
+            "in PATH."
         )
+
+        print()
+        print("Check with:")
+        print("  az --version")
+
         return 1
 
     if not terraform_available():
+
         print(
-            "ERROR: Terraform was not found."
+            "ERROR: Terraform was not found "
+            "in PATH."
         )
+
+        print()
+        print("Check with:")
+        print("  terraform --version")
+
         return 1
+
+    # -----------------------------------------------------
+    # Show tool versions
+    # -----------------------------------------------------
+
+    print("Azure CLI:")
+
+    run_command(
+        ["az", "--version"]
+    )
+
+    print()
+    print("Terraform:")
+
+    run_command(
+        ["terraform", "--version"]
+    )
 
     # -----------------------------------------------------
     # Azure ML cleanup
     # -----------------------------------------------------
 
     try:
+
         delete_endpoint()
         delete_model_versions()
 
     except Exception as exc:
+
         print()
         print(
             f"Azure cleanup failed: {exc}"
         )
+
         print(
             "Terraform destroy was NOT executed."
         )
+
         return 1
 
     # -----------------------------------------------------
@@ -329,14 +433,21 @@ def main() -> int:
     # -----------------------------------------------------
 
     try:
+
         terraform_destroy()
 
     except Exception as exc:
+
         print()
         print(
             f"Terraform cleanup failed: {exc}"
         )
+
         return 1
+
+    # -----------------------------------------------------
+    # Completed
+    # -----------------------------------------------------
 
     print()
     print("=" * 50)
