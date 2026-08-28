@@ -17,11 +17,22 @@ jobs:
       ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       ARM_TENANT_ID: d81a2e37-d18e-42ec-8839-9a2de1586e0c
 
+      AZURE_RESOURCE_GROUP: mlops-thesis-azure
+      AZURE_ML_WORKSPACE: mlops-thesis-aml
+
     steps:
+
+      # ==========================================
+      # Checkout
+      # ==========================================
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # ==========================================
+      # Azure Login
+      # ==========================================
 
       - name: Azure Login
         uses: azure/login@v2
@@ -35,24 +46,95 @@ jobs:
             }
 
 
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
 
+      # ==========================================
+      # Terraform Init
+      # ==========================================
+
       - name: Terraform Init
         run: |
-          terraform init
+          terraform init \
+            -input=false
 
+
+      # ==========================================
+      # Cleanup existing Azure ML endpoints
+      # ==========================================
+
+      - name: Remove existing Azure ML online endpoints
+        working-directory: ${{ github.workspace }}
+        run: |
+          echo "Checking whether Azure ML workspace exists..."
+
+          if az ml workspace show \
+            --name "${AZURE_ML_WORKSPACE}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --query name \
+            -o tsv \
+            > /tmp/workspace-name.txt 2>/dev/null
+          then
+            echo "Azure ML workspace exists."
+
+            echo "Checking existing online endpoints..."
+
+            ENDPOINTS=$(az ml online-endpoint list \
+              --resource-group "${AZURE_RESOURCE_GROUP}" \
+              --workspace-name "${AZURE_ML_WORKSPACE}" \
+              --query "[].name" \
+              -o tsv)
+
+            if [[ -z "${ENDPOINTS}" ]]; then
+              echo "No Azure ML online endpoints found."
+            else
+              while IFS= read -r endpoint; do
+                if [[ -n "${endpoint}" ]]; then
+                  echo "Deleting Azure ML online endpoint: ${endpoint}"
+
+                  az ml online-endpoint delete \
+                    --name "${endpoint}" \
+                    --resource-group "${AZURE_RESOURCE_GROUP}" \
+                    --workspace-name "${AZURE_ML_WORKSPACE}" \
+                    --yes
+
+                  echo "Deleted endpoint: ${endpoint}"
+                fi
+              done <<< "${ENDPOINTS}"
+            fi
+
+          else
+            echo "Azure ML workspace does not exist yet."
+            echo "Skipping endpoint cleanup."
+          fi
+
+
+      # ==========================================
+      # Terraform Format
+      # ==========================================
 
       - name: Terraform Format
         run: |
           terraform fmt -check -recursive
 
 
+      # ==========================================
+      # Terraform Validate
+      # ==========================================
+
       - name: Terraform Validate
         run: |
           terraform validate
 
+
+      # ==========================================
+      # Terraform Plan
+      # ==========================================
 
       - name: Terraform Plan
         run: |
@@ -60,12 +142,20 @@ jobs:
             -input=false
 
 
+      # ==========================================
+      # Terraform Apply
+      # ==========================================
+
       - name: Terraform Apply
         run: |
           terraform apply \
             -input=false \
             -auto-approve
 
+
+      # ==========================================
+      # Terraform Outputs
+      # ==========================================
 
       - name: Terraform Outputs
         run: |

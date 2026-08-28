@@ -39,7 +39,7 @@ def resolve_command(command: str) -> str:
     """
     Resolve a command in a cross-platform way.
 
-    On Windows Azure CLI is commonly exposed as az.cmd.
+    On Windows, Azure CLI is commonly installed as az.cmd.
     """
 
     if os.name == "nt":
@@ -67,6 +67,7 @@ def run_command(
     *,
     cwd: Path | None = None,
     capture_output: bool = False,
+    timeout: int = 60,
 ) -> subprocess.CompletedProcess[str]:
 
     if not command:
@@ -79,13 +80,21 @@ def run_command(
         *command[1:],
     ]
 
-    return subprocess.run(
-        resolved_command,
-        cwd=cwd,
-        check=False,
-        text=True,
-        capture_output=capture_output,
-    )
+    try:
+        return subprocess.run(
+            resolved_command,
+            cwd=cwd,
+            check=False,
+            text=True,
+            capture_output=capture_output,
+            timeout=timeout,
+        )
+
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"Command timed out after {timeout} seconds: "
+            f"{' '.join(command)}"
+        ) from exc
 
 
 def command_exists(command: str) -> bool:
@@ -132,12 +141,25 @@ def delete_endpoint() -> None:
             "tsv",
         ],
         capture_output=True,
+        timeout=60,
     )
 
     if result.returncode != 0:
 
+        error = result.stderr.strip()
+
+        raise RuntimeError(
+            "Failed to check Azure ML endpoint. "
+            f"Azure CLI returned: {error}"
+        )
+
+    endpoint_name = result.stdout.strip()
+
+    if not endpoint_name:
+
         print(
-            f"Endpoint does not exist: {ENDPOINT_NAME}"
+            f"Endpoint does not exist: "
+            f"{ENDPOINT_NAME}"
         )
 
         return
@@ -160,7 +182,8 @@ def delete_endpoint() -> None:
             "--workspace-name",
             AZURE_ML_WORKSPACE,
             "--yes",
-        ]
+        ],
+        timeout=300,
     )
 
     if result.returncode != 0:
@@ -170,7 +193,8 @@ def delete_endpoint() -> None:
         )
 
     print(
-        f"Endpoint deleted: {ENDPOINT_NAME}"
+        f"Endpoint deleted: "
+        f"{ENDPOINT_NAME}"
     )
 
 
@@ -204,10 +228,17 @@ def list_model_versions() -> list[str]:
             "tsv",
         ],
         capture_output=True,
+        timeout=60,
     )
 
     if result.returncode != 0:
-        return []
+
+        error = result.stderr.strip()
+
+        raise RuntimeError(
+            "Failed to list registered model versions. "
+            f"Azure CLI returned: {error}"
+        )
 
     versions = [
         line.strip()
@@ -241,7 +272,9 @@ def delete_model_versions() -> None:
         print(f"  - version {version}")
 
     print()
-    print("Deleting registered model versions...")
+    print(
+        "Deleting registered model versions..."
+    )
 
     for version in versions:
 
@@ -265,7 +298,8 @@ def delete_model_versions() -> None:
                 "--workspace-name",
                 AZURE_ML_WORKSPACE,
                 "--yes",
-            ]
+            ],
+            timeout=300,
         )
 
         if result.returncode != 0:
@@ -304,6 +338,7 @@ def terraform_destroy() -> None:
             "-auto-approve",
         ],
         cwd=TERRAFORM_DIR,
+        timeout=1800,
     )
 
     if result.returncode != 0:
@@ -396,14 +431,16 @@ def main() -> int:
     print("Azure CLI:")
 
     run_command(
-        ["az", "--version"]
+        ["az", "--version"],
+        timeout=30,
     )
 
     print()
     print("Terraform:")
 
     run_command(
-        ["terraform", "--version"]
+        ["terraform", "--version"],
+        timeout=30,
     )
 
     # -----------------------------------------------------
