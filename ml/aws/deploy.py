@@ -26,17 +26,20 @@ ENDPOINT_NAME = os.getenv(
     "mlops-thesis-endpoint",
 )
 
-INSTANCE_TYPE = os.environ[
-    "INSTANCE_TYPE"
-]
+INSTANCE_TYPE = os.getenv(
+    "INSTANCE_TYPE",
+    "ml.t2.medium",
+)
 
-FRAMEWORK_VERSION = os.environ[
-    "FRAMEWORK_VERSION"
-]
+FRAMEWORK_VERSION = os.getenv(
+    "FRAMEWORK_VERSION",
+    "1.2-1",
+)
 
-ENTRY_POINT = os.environ[
-    "ENTRY_POINT"
-]
+ENTRY_POINT = os.getenv(
+    "ENTRY_POINT",
+    "ml/aws/predict.py",
+)
 
 
 # =========================================================
