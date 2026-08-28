@@ -37,13 +37,13 @@ jobs:
 
 
       - name: Terraform Init
-        working-directory: terraform/native/aws
+        working-directory: terraform/aws
         run: |
           terraform init -input=false
 
 
       - name: Get Terraform outputs
-        working-directory: terraform/native/aws
+        working-directory: terraform/aws
         run: |
           echo "MODEL_BUCKET=$(terraform output -raw bucket_name)" >> "$GITHUB_ENV"
           echo "SAGEMAKER_ROLE_ARN=$(terraform output -raw sagemaker_role_arn)" >> "$GITHUB_ENV"

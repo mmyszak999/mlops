@@ -61,7 +61,7 @@ jobs:
       # ==========================================
 
       - name: Terraform Init
-        working-directory: terraform/native/aws
+        working-directory: terraform/aws
         run: |
           terraform init \
             -input=false
@@ -72,7 +72,7 @@ jobs:
       # ==========================================
 
       - name: Get Terraform outputs
-        working-directory: terraform/native/aws
+        working-directory: terraform/aws
         run: |
           MODEL_BUCKET="$(terraform output -raw model_bucket_name)"
 
