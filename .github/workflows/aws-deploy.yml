@@ -2,24 +2,58 @@ name: AWS Native - Deploy Model
 
 on:
   workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Model version"
+        required: true
+        default: "v1"
 
 jobs:
   deploy-model:
     runs-on: ubuntu-latest
 
+    env:
+      AWS_REGION: us-east-1
+      MODEL_VERSION: ${{ inputs.model_version }}
+
     steps:
+
       - uses: actions/checkout@v4
+
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - run: pip install -r ml/aws/requirements.txt
 
-      - run: python ml/aws/deploy.py
+      - uses: hashicorp/setup-terraform@v3
+
+
+      - name: Terraform Init
+        working-directory: terraform/native/aws
+        run: |
+          terraform init -input=false
+
+
+      - name: Get Terraform outputs
+        working-directory: terraform/native/aws
+        run: |
+          echo "MODEL_BUCKET=$(terraform output -raw model_bucket_name)" >> "$GITHUB_ENV"
+          echo "SAGEMAKER_ROLE_ARN=$(terraform output -raw sagemaker_role_arn)" >> "$GITHUB_ENV"
+
+
+      - name: Install dependencies
+        run: |
+          pip install -r ml/aws/requirements.txt
+
+
+      - name: Deploy model
+        run: |
+          python ml/aws/deploy.py

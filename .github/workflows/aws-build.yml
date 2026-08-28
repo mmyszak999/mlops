@@ -2,6 +2,11 @@ name: AWS Native - Build Model
 
 on:
   workflow_dispatch:
+    inputs:
+      model_version:
+        description: "Model version"
+        required: true
+        default: "v1"
 
 jobs:
   train-model:
@@ -9,24 +14,104 @@ jobs:
 
     env:
       AWS_REGION: us-east-1
-      MODEL_BUCKET: mlops-thesis-d37b3fa3
-      MODEL_VERSION: v1
+      MODEL_VERSION: ${{ inputs.model_version }}
 
     steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      # ==========================================
+      # Checkout
+      # ==========================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # Setup Python
+      # ==========================================
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - uses: aws-actions/configure-aws-credentials@v4
+
+      # ==========================================
+      # AWS credentials
+      # ==========================================
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+
+      # ==========================================
+      # Setup Terraform
+      # ==========================================
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ==========================================
+      # Terraform Init
+      # ==========================================
+
+      - name: Terraform Init
+        working-directory: terraform/native/aws
+        run: |
+          terraform init \
+            -input=false
+
+
+      # ==========================================
+      # Get Terraform outputs
+      # ==========================================
+
+      - name: Get Terraform outputs
+        working-directory: terraform/native/aws
+        run: |
+          MODEL_BUCKET="$(terraform output -raw model_bucket_name)"
+
+          if [[ -z "${MODEL_BUCKET}" ]]; then
+            echo "ERROR: Terraform returned an empty model bucket."
+            exit 1
+          fi
+
+          echo "MODEL_BUCKET=${MODEL_BUCKET}" >> "$GITHUB_ENV"
+
+          echo "Model bucket: ${MODEL_BUCKET}"
+
+
+      # ==========================================
+      # Install dependencies
+      # ==========================================
+
       - name: Install dependencies
-        run: pip install -r ml/aws/requirements.txt
+        run: |
+          pip install -r ml/aws/requirements.txt
+
+
+      # ==========================================
+      # AWS identity
+      # ==========================================
+
+      - name: Check AWS identity
+        run: |
+          aws sts get-caller-identity
+
+
+      # ==========================================
+      # Train model
+      # ==========================================
 
       - name: Train model
-        run: python -m ml.aws.train
+        env:
+          MODEL_BUCKET: ${{ env.MODEL_BUCKET }}
+          MODEL_VERSION: ${{ env.MODEL_VERSION }}
+        run: |
+          PYTHONPATH="${GITHUB_WORKSPACE}" \
+          python -m ml.aws.train
