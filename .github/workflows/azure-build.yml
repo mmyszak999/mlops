@@ -26,17 +26,8 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-
-      # ==========================================
-      # Azure login
-      # ==========================================
 
       - name: Azure Login
         uses: azure/login@v2
@@ -50,10 +41,6 @@ jobs:
             }
 
 
-      # ==========================================
-      # Check Azure identity
-      # ==========================================
-
       - name: Check Azure identity
         run: |
           az account show \
@@ -62,19 +49,11 @@ jobs:
             -o table
 
 
-      # ==========================================
-      # Setup Python
-      # ==========================================
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-
-      # ==========================================
-      # Install dependencies
-      # ==========================================
 
       - name: Install dependencies
         run: |
@@ -83,10 +62,6 @@ jobs:
           pip install \
             -r ml/azure/requirements.txt
 
-
-      # ==========================================
-      # Show configuration
-      # ==========================================
 
       - name: Show configuration
         run: |
@@ -97,10 +72,6 @@ jobs:
           echo "Model version: ${MODEL_VERSION}"
 
 
-      # ==========================================
-      # Verify Azure ML workspace
-      # ==========================================
-
       - name: Verify Azure ML workspace
         run: |
           az ml workspace show \
@@ -110,10 +81,6 @@ jobs:
             --query "{name:name,location:location}" \
             -o table
 
-
-      # ==========================================
-      # Train and register model
-      # ==========================================
 
       - name: Train and register model
         run: |

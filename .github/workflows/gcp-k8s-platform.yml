@@ -19,17 +19,8 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-
-      # ==========================================
-      # Authenticate to Google Cloud
-      # ==========================================
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -37,20 +28,12 @@ jobs:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
 
-      # ==========================================
-      # Setup Google Cloud SDK
-      # ==========================================
-
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
           install_components: gke-gcloud-auth-plugin
 
-
-      # ==========================================
-      # Check GCP identity
-      # ==========================================
 
       - name: Check GCP identity
         run: |
@@ -65,27 +48,15 @@ jobs:
           gke-gcloud-auth-plugin --version
 
 
-      # ==========================================
-      # Setup Terraform
-      # ==========================================
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-
-      # ==========================================
-      # Terraform Init
-      # ==========================================
 
       - name: Terraform Init
         working-directory: terraform/kubernetes/gcp
         run: |
           terraform init -input=false
 
-
-      # ==========================================
-      # Get Terraform outputs
-      # ==========================================
 
       - name: Get Terraform outputs
         working-directory: terraform/kubernetes/gcp
@@ -100,11 +71,6 @@ jobs:
           echo "GCP_INFERENCE_SERVICE_ACCOUNT=$(terraform output -raw inference_service_account_email)" >> "$GITHUB_ENV"
           echo "GCP_MLFLOW_SERVICE_ACCOUNT=$(terraform output -raw mlflow_service_account_email)" >> "$GITHUB_ENV"
 
-
-      # ==========================================
-      # Check configuration
-      # ==========================================
-
       - name: Show configuration
         run: |
           echo "Project: ${GCP_PROJECT_ID}"
@@ -115,18 +81,10 @@ jobs:
           echo "Artifact Registry: ${ARTIFACT_REGISTRY_URL}"
 
 
-      # ==========================================
-      # Set active GCP project
-      # ==========================================
-
       - name: Set GCP project
         run: |
           gcloud config set project "${GCP_PROJECT_ID}"
 
-
-      # ==========================================
-      # Docker authentication
-      # ==========================================
 
       - name: Configure Docker for Artifact Registry
         run: |
@@ -134,10 +92,6 @@ jobs:
             "${GCP_REGION}-docker.pkg.dev" \
             --quiet
 
-
-      # ==========================================
-      # Build MLflow image
-      # ==========================================
 
       - name: Build MLflow image
         run: |
@@ -147,19 +101,12 @@ jobs:
             .
 
 
-      # ==========================================
-      # Push MLflow image
-      # ==========================================
-
       - name: Push MLflow image
         run: |
           docker push \
             "${ARTIFACT_REGISTRY_URL}/mlops-thesis-k8s-mlflow:${MLFLOW_IMAGE_TAG}"
 
 
-      # ==========================================
-      # Configure kubectl
-      # ==========================================
 
       - name: Get GKE credentials
         run: |
@@ -169,29 +116,17 @@ jobs:
             --project="${GCP_PROJECT_ID}"
 
 
-      # ==========================================
-      # Check Kubernetes access
-      # ==========================================
-
       - name: Check Kubernetes access
         run: |
           kubectl cluster-info
           kubectl get nodes -o wide
 
 
-      # ==========================================
-      # Namespace
-      # ==========================================
-
       - name: Apply namespace
         run: |
           kubectl apply \
             -f kubernetes/namespace.yaml
 
-
-      # ==========================================
-      # GCP ServiceAccounts / Workload Identity
-      # ==========================================
 
       - name: Prepare GCP ServiceAccounts
         run: |
@@ -209,28 +144,20 @@ jobs:
             -f /tmp/gcp-service-accounts.yaml
 
 
-      # ==========================================
-      # GCP StorageClass
-      # ==========================================
-
       - name: Apply GCP StorageClass
         run: |
           kubectl apply \
             -f kubernetes/gcp-storage-class.yaml
 
 
-      # ==========================================
-      # Check StorageClass
-      # ==========================================
+
 
       - name: Check StorageClass
         run: |
           kubectl get storageclass
 
 
-      # ==========================================
-      # PostgreSQL secret
-      # ==========================================
+  
 
       - name: Prepare PostgreSQL secret
         run: |
@@ -240,9 +167,6 @@ jobs:
             > /tmp/postgres-secret.yaml
 
 
-      # ==========================================
-      # PostgreSQL configuration
-      # ==========================================
 
       - name: Apply PostgreSQL configuration
         run: |
@@ -252,10 +176,6 @@ jobs:
           kubectl apply \
             -f /tmp/postgres-secret.yaml
 
-
-      # ==========================================
-      # PostgreSQL StatefulSet
-      # ==========================================
 
       - name: Prepare PostgreSQL StatefulSet
         run: |
@@ -271,19 +191,11 @@ jobs:
             -f /tmp/postgres-statefulset.yaml
 
 
-      # ==========================================
-      # PostgreSQL service
-      # ==========================================
-
       - name: Apply PostgreSQL service
         run: |
           kubectl apply \
             -f kubernetes/postgres/service.yaml
 
-
-      # ==========================================
-      # Wait for PostgreSQL
-      # ==========================================
 
       - name: Wait for PostgreSQL
         run: |
@@ -292,11 +204,6 @@ jobs:
             pod/postgres-0 \
             -n mlops \
             --timeout=10m
-
-
-      # ==========================================
-      # PostgreSQL diagnostic
-      # ==========================================
 
       - name: Check PostgreSQL
         run: |
@@ -310,11 +217,6 @@ jobs:
           kubectl get pvc \
             -n mlops
 
-
-      # ==========================================
-      # MLflow config
-      # ==========================================
-
       - name: Prepare MLflow config
         run: |
           sed \
@@ -327,11 +229,6 @@ jobs:
         run: |
           kubectl apply \
             -f /tmp/mlflow-config.yaml
-
-
-      # ==========================================
-      # MLflow deployment
-      # ==========================================
 
       - name: Prepare MLflow Deployment
         run: |
@@ -347,19 +244,11 @@ jobs:
             -f /tmp/mlflow-deployment.yaml
 
 
-      # ==========================================
-      # MLflow service
-      # ==========================================
-
       - name: Apply MLflow service
         run: |
           kubectl apply \
             -f kubernetes/mlflow/service.yaml
 
-
-      # ==========================================
-      # Wait for MLflow
-      # ==========================================
 
       - name: Wait for MLflow
         run: |
@@ -369,10 +258,6 @@ jobs:
             -n mlops \
             --timeout=10m
 
-
-      # ==========================================
-      # MLflow diagnostic
-      # ==========================================
 
       - name: Check MLflow
         run: |
@@ -387,10 +272,6 @@ jobs:
             mlflow \
             -n mlops
 
-
-      # ==========================================
-      # Final status
-      # ==========================================
 
       - name: Show platform status
         run: |

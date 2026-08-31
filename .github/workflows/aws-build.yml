@@ -18,27 +18,13 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-
-      # ==========================================
-      # Setup Python
-      # ==========================================
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-
-      # ==========================================
-      # AWS credentials
-      # ==========================================
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -47,29 +33,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-
-      # ==========================================
-      # Setup Terraform
-      # ==========================================
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-
-
-      # ==========================================
-      # Terraform Init
-      # ==========================================
 
       - name: Terraform Init
         working-directory: terraform/aws
         run: |
           terraform init \
             -input=false
-
-
-      # ==========================================
-      # Get Terraform outputs
-      # ==========================================
 
       - name: Get Terraform outputs
         working-directory: terraform/aws
@@ -85,28 +56,14 @@ jobs:
 
           echo "Model bucket: ${MODEL_BUCKET}"
 
-
-      # ==========================================
-      # Install dependencies
-      # ==========================================
-
       - name: Install dependencies
         run: |
           pip install -r ml/aws/requirements.txt
-
-
-      # ==========================================
-      # AWS identity
-      # ==========================================
 
       - name: Check AWS identity
         run: |
           aws sts get-caller-identity
 
-
-      # ==========================================
-      # Train model
-      # ==========================================
 
       - name: Train model
         env:

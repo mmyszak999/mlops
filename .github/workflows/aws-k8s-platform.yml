@@ -20,17 +20,9 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # ==========================================
-      # AWS credentials
-      # ==========================================
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -40,17 +32,9 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
 
-      # ==========================================
-      # Setup Terraform
-      # ==========================================
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-
-      # ==========================================
-      # Terraform Init
-      # ==========================================
 
       - name: Terraform Init
         working-directory: terraform/kubernetes/aws
@@ -59,9 +43,6 @@ jobs:
             -input=false
 
 
-      # ==========================================
-      # Get Terraform outputs
-      # ==========================================
 
       - name: Get Terraform outputs
         working-directory: terraform/kubernetes/aws
@@ -79,9 +60,6 @@ jobs:
           echo "${MODEL_BUCKET}"
 
 
-      # ==========================================
-      # Refresh EKS kubeconfig
-      # ==========================================
 
       - name: Refresh EKS kubeconfig
         run: |
@@ -93,18 +71,12 @@ jobs:
           kubectl config use-context "${EKS_CLUSTER_NAME}"
 
 
-      # ==========================================
-      # AWS identity
-      # ==========================================
 
       - name: Check AWS identity
         run: |
           aws sts get-caller-identity
 
 
-      # ==========================================
-      # Check resolved configuration
-      # ==========================================
 
       - name: Show resolved configuration
         run: |
@@ -116,18 +88,11 @@ jobs:
           echo "Storage Class: ${STORAGE_CLASS}"
 
 
-      # ==========================================
-      # ECR login
-      # ==========================================
+
 
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
-
-
-      # ==========================================
-      # Build MLflow image
-      # ==========================================
 
       - name: Build MLflow image
         env:
@@ -139,10 +104,6 @@ jobs:
             .
 
 
-      # ==========================================
-      # Push MLflow image
-      # ==========================================
-
       - name: Push MLflow image
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
@@ -151,29 +112,16 @@ jobs:
             "${ECR_REGISTRY}/${MLFLOW_ECR_REPOSITORY}:${MLFLOW_IMAGE_TAG}"
 
 
-      # ==========================================
-      # Check Kubernetes access
-      # ==========================================
-
       - name: Check Kubernetes access
         run: |
           kubectl cluster-info
           kubectl get nodes
 
 
-      # ==========================================
-      # Namespace
-      # ==========================================
-
       - name: Apply namespace
         run: |
           kubectl apply \
             -f kubernetes/namespace.yaml
-
-
-      # ==========================================
-      # AWS ServiceAccounts
-      # ==========================================
 
       - name: Apply AWS ServiceAccounts
         run: |
@@ -181,29 +129,17 @@ jobs:
             -f kubernetes/aws-service-accounts.yaml
 
 
-      # ==========================================
-      # AWS StorageClass
-      # ==========================================
-
       - name: Apply AWS StorageClass
         run: |
           kubectl apply \
             -f kubernetes/aws-storage-class.yaml
 
 
-      # ==========================================
-      # Check StorageClass
-      # ==========================================
-
       - name: Check storage class
         run: |
           kubectl get storageclass
           kubectl get storageclass "${STORAGE_CLASS}"
 
-
-      # ==========================================
-      # Prepare PostgreSQL secret
-      # ==========================================
 
       - name: Prepare PostgreSQL secret
         run: |
@@ -212,10 +148,6 @@ jobs:
             kubernetes/postgres/secret.yaml \
             > /tmp/postgres-secret.yaml
 
-
-      # ==========================================
-      # Apply PostgreSQL configuration
-      # ==========================================
 
       - name: Apply PostgreSQL configuration
         run: |
@@ -226,10 +158,6 @@ jobs:
             -f /tmp/postgres-secret.yaml
 
 
-      # ==========================================
-      # Prepare PostgreSQL StatefulSet
-      # ==========================================
-
       - name: Prepare PostgreSQL StatefulSet
         run: |
           sed \
@@ -237,10 +165,6 @@ jobs:
             kubernetes/postgres/deployment.yaml \
             > /tmp/postgres-statefulset.yaml
 
-
-      # ==========================================
-      # Apply PostgreSQL StatefulSet
-      # ==========================================
 
       - name: Apply PostgreSQL StatefulSet
         run: |
@@ -257,20 +181,11 @@ jobs:
           kubectl get pvc \
             -n mlops
 
-
-      # ==========================================
-      # Apply PostgreSQL Service
-      # ==========================================
-
       - name: Apply PostgreSQL service
         run: |
           kubectl apply \
             -f kubernetes/postgres/service.yaml
 
-
-      # ==========================================
-      # Wait for PostgreSQL
-      # ==========================================
 
       - name: Wait for PostgreSQL
         run: |
@@ -279,10 +194,6 @@ jobs:
             -n mlops \
             --timeout=10m
 
-
-      # ==========================================
-      # PostgreSQL diagnostic
-      # ==========================================
 
       - name: Check PostgreSQL
         run: |
@@ -301,10 +212,6 @@ jobs:
             -n mlops
 
 
-      # ==========================================
-      # Prepare MLflow config
-      # ==========================================
-
       - name: Prepare MLflow config
         run: |
           cat > /tmp/mlflow-config.yaml <<EOF
@@ -321,19 +228,11 @@ jobs:
           cat /tmp/mlflow-config.yaml
 
 
-      # ==========================================
-      # Apply MLflow config
-      # ==========================================
-
       - name: Apply MLflow config
         run: |
           kubectl apply \
             -f /tmp/mlflow-config.yaml
 
-
-      # ==========================================
-      # Verify MLflow config
-      # ==========================================
 
       - name: Verify MLflow config
         run: |
@@ -356,10 +255,6 @@ jobs:
           echo "MLflow artifact destination is correct."
 
 
-      # ==========================================
-      # Prepare MLflow Deployment
-      # ==========================================
-
       - name: Prepare MLflow Deployment
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
@@ -370,9 +265,6 @@ jobs:
             > /tmp/mlflow-deployment.yaml
 
 
-      # ==========================================
-      # Apply MLflow Deployment
-      # ==========================================
 
       - name: Apply MLflow Deployment
         run: |
@@ -380,9 +272,6 @@ jobs:
             -f /tmp/mlflow-deployment.yaml
 
 
-      # ==========================================
-      # Restart MLflow
-      # ==========================================
 
       - name: Restart MLflow
         run: |
@@ -396,19 +285,10 @@ jobs:
             --timeout=10m
 
 
-      # ==========================================
-      # Apply MLflow Service
-      # ==========================================
-
       - name: Apply MLflow service
         run: |
           kubectl apply \
             -f kubernetes/mlflow/service.yaml
-
-
-      # ==========================================
-      # Final status
-      # ==========================================
 
       - name: Show platform status
         run: |

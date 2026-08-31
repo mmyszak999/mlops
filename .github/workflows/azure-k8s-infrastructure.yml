@@ -19,17 +19,9 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # ==========================================
-      # Azure Login
-      # ==========================================
 
       - name: Azure Login
         uses: azure/login@v2
@@ -43,9 +35,6 @@ jobs:
             }
 
 
-      # ==========================================
-      # Check Azure identity
-      # ==========================================
 
       - name: Check Azure identity
         run: |
@@ -55,17 +44,9 @@ jobs:
             -o table
 
 
-      # ==========================================
-      # Setup Terraform
-      # ==========================================
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-
-
-      # ==========================================
-      # Terraform Init
-      # ==========================================
 
       - name: Terraform Init
         run: |
@@ -73,37 +54,21 @@ jobs:
             -input=false
 
 
-      # ==========================================
-      # Terraform Format
-      # ==========================================
-
       - name: Terraform Format
         run: |
           terraform fmt -check -recursive
 
-
-      # ==========================================
-      # Terraform Validate
-      # ==========================================
 
       - name: Terraform Validate
         run: |
           terraform validate
 
 
-      # ==========================================
-      # Terraform Plan
-      # ==========================================
-
       - name: Terraform Plan
         run: |
           terraform plan \
             -input=false
 
-
-      # ==========================================
-      # Terraform Apply
-      # ==========================================
 
       - name: Terraform Apply
         run: |
@@ -112,20 +77,12 @@ jobs:
             -auto-approve
 
 
-      # ==========================================
-      # Terraform Outputs
-      # ==========================================
-
       - name: Terraform Outputs
         run: |
           echo "=== Terraform Outputs ==="
 
           terraform output
 
-
-      # ==========================================
-      # Show AKS information
-      # ==========================================
 
       - name: Show AKS information
         run: |

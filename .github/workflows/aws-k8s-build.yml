@@ -42,19 +42,10 @@ jobs:
           kubectl config use-context "${EKS_CLUSTER_NAME}"
 
 
-      # ==========================================
-      # AWS identity diagnostic
-      # ==========================================
-
       - name: Check AWS identity
         run: |
           echo "AWS identity:"
           aws sts get-caller-identity
-
-
-      # ==========================================
-      # Check EKS access entry for current identity
-      # ==========================================
 
       - name: Check EKS cluster
         run: |
@@ -63,11 +54,6 @@ jobs:
             --name "${EKS_CLUSTER_NAME}" \
             --region "${AWS_REGION}" \
             --query 'cluster.{name:name,status:status,version:version,authentication:accessConfig.authenticationMode}'
-
-
-      # ==========================================
-      # ECR
-      # ==========================================
 
       - name: Login to Amazon ECR
         id: ecr-login
@@ -99,20 +85,12 @@ jobs:
             "${ECR_REGISTRY}/${TRAIN_ECR_REPOSITORY}:${MODEL_VERSION}"
 
 
-      # ==========================================
-      # Kubernetes configuration
-      # ==========================================
-
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
             --region "${AWS_REGION}" \
             --name "${EKS_CLUSTER_NAME}"
 
-
-      # ==========================================
-      # Kubernetes access diagnostic
-      # ==========================================
 
       - name: Check Kubernetes access
         run: |
@@ -128,39 +106,21 @@ jobs:
           kubectl get nodes -o wide
 
 
-      # ==========================================
-      # Namespace
-      # ==========================================
-
       - name: Apply namespace
         run: |
           kubectl apply \
             -f kubernetes/namespace.yaml
 
 
-      # ==========================================
-      # AWS ServiceAccounts
-      # ==========================================
-
       - name: Apply AWS ServiceAccounts
         run: |
           kubectl apply \
             -f kubernetes/aws-service-accounts.yaml
 
-
-      # ==========================================
-      # Check ServiceAccounts
-      # ==========================================
-
       - name: Check ServiceAccounts
         run: |
           kubectl get serviceaccounts \
             -n mlops
-
-
-      # ==========================================
-      # Prepare training Job
-      # ==========================================
 
       - name: Prepare training Job
         env:
@@ -172,11 +132,6 @@ jobs:
             kubernetes/training/job.yaml \
             > /tmp/training-job.yaml
 
-
-      # ==========================================
-      # Start training Job
-      # ==========================================
-
       - name: Start training Job
         run: |
           kubectl delete job mlops-training \
@@ -186,10 +141,6 @@ jobs:
           kubectl apply \
             -f /tmp/training-job.yaml
 
-
-      # ==========================================
-      # Show Job and Pod status
-      # ==========================================
 
       - name: Check training status
         run: |
@@ -201,10 +152,6 @@ jobs:
           kubectl get pods -n mlops -o wide
 
 
-      # ==========================================
-      # Wait for training Job
-      # ==========================================
-
       - name: Wait for training Job
         run: |
           kubectl wait \
@@ -214,9 +161,6 @@ jobs:
             --timeout=30m
 
 
-      # ==========================================
-      # Show training logs
-      # ==========================================
 
       - name: Show training logs
         run: |

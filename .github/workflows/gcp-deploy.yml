@@ -26,27 +26,13 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-
-      # ==========================================
-      # Authenticate GCP
-      # ==========================================
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
-
-
-      # ==========================================
-      # Setup Python
-      # ==========================================
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -54,17 +40,10 @@ jobs:
           python-version: "3.11"
 
 
-      # ==========================================
-      # Setup Terraform
-      # ==========================================
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-
-      # ==========================================
-      # Initialize Terraform
-      # ==========================================
 
       - name: Initialize Terraform
         working-directory: terraform/gcp
@@ -72,9 +51,6 @@ jobs:
           terraform init -input=false
 
 
-      # ==========================================
-      # Get infrastructure outputs
-      # ==========================================
 
       - name: Get Terraform outputs
         working-directory: terraform/gcp
@@ -83,10 +59,6 @@ jobs:
 
           echo "ARTIFACT_REGISTRY_URL=$(terraform output -raw artifact_registry_repository_url)" >> "$GITHUB_ENV"
 
-
-      # ==========================================
-      # Show configuration
-      # ==========================================
 
       - name: Show configuration
         run: |
@@ -97,19 +69,12 @@ jobs:
           echo "ARTIFACT_REGISTRY_URL=${ARTIFACT_REGISTRY_URL}"
 
 
-      # ==========================================
-      # Verify model
-      # ==========================================
-
       - name: Verify model artifact
         run: |
           gcloud storage ls \
             "gs://${MODEL_BUCKET}/models/${MODEL_VERSION}/"
 
 
-      # ==========================================
-      # Configure Docker
-      # ==========================================
 
       - name: Configure Docker for Artifact Registry
         run: |
@@ -118,10 +83,6 @@ jobs:
             --quiet
 
 
-      # ==========================================
-      # Install dependencies
-      # ==========================================
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -129,20 +90,11 @@ jobs:
           pip install \
             -r ml/gcp/requirements.txt
 
-
-      # ==========================================
-      # Build & deploy model
-      # ==========================================
-
       - name: Deploy model
         run: |
           PYTHONPATH="${GITHUB_WORKSPACE}" \
           python ml/gcp/deploy.py
 
-
-      # ==========================================
-      # Show resources
-      # ==========================================
 
       - name: Show Vertex models
         run: |

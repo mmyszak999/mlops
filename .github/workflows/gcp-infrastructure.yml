@@ -13,35 +13,17 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-
-      # ==========================================
-      # Authenticate to Google Cloud
-      # ==========================================
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_CREDENTIALS }}
 
-
-      # ==========================================
-      # Setup Terraform
-      # ==========================================
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-
-      # ==========================================
-      # Check GCP authentication
-      # ==========================================
 
       - name: Check GCP authentication
         run: |
@@ -49,39 +31,21 @@ jobs:
           gcloud config set project "${GCP_PROJECT_ID}"
 
 
-      # ==========================================
-      # Terraform Init
-      # ==========================================
-
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform init -reconfigure
-
-
-      # ==========================================
-      # Terraform Format Check
-      # ==========================================
 
       - name: Terraform Format Check
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform fmt -check -recursive
 
-
-      # ==========================================
-      # Terraform Validate
-      # ==========================================
-
       - name: Terraform Validate
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform validate
 
-
-      # ==========================================
-      # Prepare Terraform variables
-      # ==========================================
 
       - name: Prepare Terraform variables
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -93,10 +57,6 @@ jobs:
           EOF
 
 
-      # ==========================================
-      # Terraform Plan
-      # ==========================================
-
       - name: Terraform Plan
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
@@ -104,21 +64,12 @@ jobs:
             -out=tfplan
 
 
-      # ==========================================
-      # Terraform Apply
-      # ==========================================
-
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
           terraform apply \
             -auto-approve \
             tfplan
-
-
-      # ==========================================
-      # Terraform Outputs
-      # ==========================================
 
       - name: Show Terraform Outputs
         working-directory: ${{ env.TF_WORKING_DIR }}

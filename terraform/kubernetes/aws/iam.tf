@@ -1,7 +1,3 @@
-# =========================================================
-# EKS CLUSTER ROLE
-# =========================================================
-
 resource "aws_iam_role" "eks_cluster" {
   name = "${var.project_name}-cluster-role"
 
@@ -30,11 +26,6 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
 
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
-
-
-# =========================================================
-# EKS NODE ROLE
-# =========================================================
 
 resource "aws_iam_role" "eks_node" {
   name = "${var.project_name}-node-role"
@@ -74,11 +65,6 @@ resource "aws_iam_role_policy_attachment" "eks_node_cni_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
 }
 
-
-# =========================================================
-# TRAINING POD ROLE
-# =========================================================
-
 resource "aws_iam_role" "training_pod" {
   name = "${var.project_name}-training-pod-role"
 
@@ -103,10 +89,6 @@ resource "aws_iam_role" "training_pod" {
 }
 
 
-# =========================================================
-# INFERENCE POD ROLE
-# =========================================================
-
 resource "aws_iam_role" "inference_pod" {
   name = "${var.project_name}-inference-pod-role"
 
@@ -130,10 +112,6 @@ resource "aws_iam_role" "inference_pod" {
   })
 }
 
-
-# =========================================================
-# MLFLOW POD ROLE
-# =========================================================
 
 resource "aws_iam_role" "mlflow_pod" {
   name = "${var.project_name}-mlflow-pod-role"

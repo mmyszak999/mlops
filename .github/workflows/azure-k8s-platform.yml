@@ -22,17 +22,10 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # ==========================================
-      # Azure Login
-      # ==========================================
 
       - name: Azure Login
         uses: azure/login@v2
@@ -46,17 +39,9 @@ jobs:
             }
 
 
-      # ==========================================
-      # Setup Terraform
-      # ==========================================
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-
-      # ==========================================
-      # Terraform Init
-      # ==========================================
 
       - name: Terraform Init
         working-directory: terraform/kubernetes/azure
@@ -64,10 +49,6 @@ jobs:
           terraform init \
             -input=false
 
-
-      # ==========================================
-      # Get Terraform outputs
-      # ==========================================
 
       - name: Get Terraform outputs
         working-directory: terraform/kubernetes/azure
@@ -86,10 +67,6 @@ jobs:
           echo "MLFLOW_IDENTITY_CLIENT_ID=$(terraform output -raw mlflow_identity_client_id)" >> "$GITHUB_ENV"
 
 
-      # ==========================================
-      # Show configuration
-      # ==========================================
-
       - name: Show configuration
         run: |
           echo "Subscription: ${ARM_SUBSCRIPTION_ID}"
@@ -100,9 +77,6 @@ jobs:
           echo "Storage: ${MODEL_STORAGE_ACCOUNT}"
 
 
-      # ==========================================
-      # Get AKS credentials
-      # ==========================================
 
       - name: Get AKS credentials
         run: |
@@ -112,9 +86,6 @@ jobs:
             --overwrite-existing
 
 
-      # ==========================================
-      # Check Kubernetes
-      # ==========================================
 
       - name: Check Kubernetes access
         run: |
@@ -122,19 +93,11 @@ jobs:
           kubectl get nodes -o wide
 
 
-      # ==========================================
-      # Configure Docker for ACR
-      # ==========================================
-
       - name: Login to Azure Container Registry
         run: |
           az acr login \
             --name "${ACR_NAME}"
 
-
-      # ==========================================
-      # Build MLflow image
-      # ==========================================
 
       - name: Build MLflow image
         run: |
@@ -144,9 +107,6 @@ jobs:
             .
 
 
-      # ==========================================
-      # Push MLflow image
-      # ==========================================
 
       - name: Push MLflow image
         run: |
@@ -154,19 +114,12 @@ jobs:
             "${ACR_LOGIN_SERVER}/mlops-thesis-k8s-mlflow:${MLFLOW_IMAGE_TAG}"
 
 
-      # ==========================================
-      # Namespace
-      # ==========================================
 
       - name: Apply namespace
         run: |
           kubectl apply \
             -f kubernetes/namespace.yaml
 
-
-      # ==========================================
-      # Azure Workload Identity ServiceAccounts
-      # ==========================================
 
       - name: Prepare Azure ServiceAccounts
         run: |
@@ -184,9 +137,6 @@ jobs:
             -f /tmp/azure-service-accounts.yaml
 
 
-      # ==========================================
-      # PostgreSQL secret
-      # ==========================================
 
       - name: Prepare PostgreSQL secret
         run: |
@@ -196,9 +146,6 @@ jobs:
             > /tmp/postgres-secret.yaml
 
 
-      # ==========================================
-      # PostgreSQL configuration
-      # ==========================================
 
       - name: Apply PostgreSQL configuration
         run: |
@@ -208,10 +155,6 @@ jobs:
           kubectl apply \
             -f /tmp/postgres-secret.yaml
 
-
-      # ==========================================
-      # PostgreSQL StatefulSet
-      # ==========================================
 
       - name: Prepare PostgreSQL StatefulSet
         run: |
@@ -227,19 +170,11 @@ jobs:
             -f /tmp/postgres-statefulset.yaml
 
 
-      # ==========================================
-      # PostgreSQL service
-      # ==========================================
-
       - name: Apply PostgreSQL service
         run: |
           kubectl apply \
             -f kubernetes/postgres/service.yaml
 
-
-      # ==========================================
-      # Wait for PostgreSQL
-      # ==========================================
 
       - name: Wait for PostgreSQL
         run: |
@@ -249,10 +184,6 @@ jobs:
             -n mlops \
             --timeout=10m
 
-
-      # ==========================================
-      # MLflow configuration
-      # ==========================================
 
       - name: Prepare MLflow config
         run: |
@@ -267,10 +198,6 @@ jobs:
           kubectl apply \
             -f /tmp/mlflow-config.yaml
 
-
-      # ==========================================
-      # Prepare MLflow Deployment
-      # ==========================================
 
       - name: Prepare MLflow Deployment
         run: |
@@ -312,19 +239,11 @@ jobs:
             --timeout=5m
 
 
-      # ==========================================
-      # MLflow service
-      # ==========================================
-
       - name: Apply MLflow service
         run: |
           kubectl apply \
             -f kubernetes/mlflow/service.yaml
 
-
-      # ==========================================
-      # Wait for MLflow
-      # ==========================================
 
       - name: Wait for MLflow
         run: |
@@ -333,11 +252,6 @@ jobs:
             deployment/mlflow \
             -n mlops \
             --timeout=10m
-
-
-      # ==========================================
-      # Final status
-      # ==========================================
 
       - name: Show platform status
         run: |

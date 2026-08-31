@@ -16,17 +16,9 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # ==========================================
-      # Authenticate to Google Cloud
-      # ==========================================
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -34,44 +26,24 @@ jobs:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
 
-      # ==========================================
-      # Setup Terraform
-      # ==========================================
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-
-      # ==========================================
-      # Terraform Init
-      # ==========================================
 
       - name: Terraform Init
         run: |
           terraform init -input=false
 
 
-      # ==========================================
-      # Terraform Format
-      # ==========================================
-
       - name: Terraform Format Check
         run: |
           terraform fmt -check -recursive
 
 
-      # ==========================================
-      # Terraform Validate
-      # ==========================================
-
       - name: Terraform Validate
         run: |
           terraform validate
 
-
-      # ==========================================
-      # Terraform Plan
-      # ==========================================
 
       - name: Terraform Plan
         run: |
@@ -79,20 +51,12 @@ jobs:
             -input=false
 
 
-      # ==========================================
-      # Terraform Apply
-      # ==========================================
-
       - name: Terraform Apply
         run: |
           terraform apply \
             -input=false \
             -auto-approve
 
-
-      # ==========================================
-      # Outputs
-      # ==========================================
 
       - name: Terraform Outputs
         run: |

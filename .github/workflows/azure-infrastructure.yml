@@ -22,17 +22,8 @@ jobs:
 
     steps:
 
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
-
-      # ==========================================
-      # Azure Login
-      # ==========================================
 
       - name: Azure Login
         uses: azure/login@v2
@@ -46,27 +37,15 @@ jobs:
             }
 
 
-      # ==========================================
-      # Setup Terraform
-      # ==========================================
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-
-      # ==========================================
-      # Terraform Init
-      # ==========================================
 
       - name: Terraform Init
         run: |
           terraform init \
             -input=false
 
-
-      # ==========================================
-      # Cleanup existing Azure ML endpoints
-      # ==========================================
 
       - name: Remove existing Azure ML online endpoints
         working-directory: ${{ github.workspace }}
@@ -114,27 +93,16 @@ jobs:
           fi
 
 
-      # ==========================================
-      # Terraform Format
-      # ==========================================
-
       - name: Terraform Format
         run: |
           terraform fmt -check -recursive
 
 
-      # ==========================================
-      # Terraform Validate
-      # ==========================================
 
       - name: Terraform Validate
         run: |
           terraform validate
 
-
-      # ==========================================
-      # Terraform Plan
-      # ==========================================
 
       - name: Terraform Plan
         run: |
@@ -142,20 +110,12 @@ jobs:
             -input=false
 
 
-      # ==========================================
-      # Terraform Apply
-      # ==========================================
-
       - name: Terraform Apply
         run: |
           terraform apply \
             -input=false \
             -auto-approve
 
-
-      # ==========================================
-      # Terraform Outputs
-      # ==========================================
 
       - name: Terraform Outputs
         run: |
